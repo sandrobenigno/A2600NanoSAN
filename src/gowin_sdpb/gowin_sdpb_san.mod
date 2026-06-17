@@ -1,0 +1,22 @@
+-series GW2AR
+-device GW2AR-18
+-device_version C
+-package QFN88
+-part_number GW2AR-LV18QN88C8/I7
+
+
+-mod_name Gowin_SDPB
+-file_name gowin_sdpb_san
+-path X:/ATARI/A2600Nano-2.5/A2600Nano-2.5/src/gowin_sdpb/
+-type RAM_SDP
+-file_type vhdl
+-bram_b true
+-ip_version 1.0
+-depth_0 65535
+-depth_1 65535
+-width_0 8
+-width_1 8
+-read_mode bypass
+-reset_mode sync
+-init_file X:\ATARI\A2600Nano-2.5\A2600Nano-2.5\tools\benigno_splash.mi
+-init_match port_A
