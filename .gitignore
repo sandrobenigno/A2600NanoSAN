@@ -6,3 +6,4 @@ simulation/transcript
 !impl/pnr/device.cfg
 *.user
 impl/pnr/device.cfg
+TMP
