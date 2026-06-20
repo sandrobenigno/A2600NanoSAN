@@ -1,30 +1,35 @@
 # A2600NanoSAN
 
-The A2600NanoSAN is a custom core implementation based on the great [A2600Nano](https://github.com/MiSTle-Dev/A2600Nano) core wich is a port of the [MiSTer](https://github.com/MiSTer-devel/Atari2600_MiSTer) FPGA core components of the [Atari 2600 VCS](https://en.wikipedia.org/wiki/Atari_2600). It is targeted for:<br>
+The **A2600NanoSAN** is a custom Atari 2600 VCS core implementation. It is based on the [A2600Nano](https://github.com/MiSTle-Dev/A2600Nano) core, which is a port of the [MiSTer Atari 2600](https://github.com/MiSTer-devel/Atari2600_MiSTer) FPGA core components. 
 
-| Board      | FPGA       | support |Note|
-| ---        |        -   | -     |-|
-| [Tang Nano 20k](https://wiki.sipeed.com/nano20k)     | [GW2AR](https://www.gowinsemi.com/en/product/detail/38/)  |HDMI  |FPGABuddy Companion Board + DB9-to-SPI Board |
+It is designed for the following hardware configuration:
 
-This project relies on my own custom firmware and board being connected to the FPGA. --> [FPGABuddy](https://github.com/sandrobenigno/FPGABuddy) <--  
+| Board | FPGA | Video Output | Support / Notes |
+| --- | --- | --- | --- |
+| [Tang Nano 20k](https://wiki.sipeed.com/nano20k) | [GW2AR](https://www.gowinsemi.com/en/product/detail/38/) | HDMI | FPGABuddy Companion Board + DB9-to-SPI Board |
 
-Our customized version of A2600Nano Core adds some nice features:
+This project requires connecting a custom coprocessor board running dedicated firmware: [FPGABuddy](https://github.com/sandrobenigno/FPGABuddy).
 
-* External phisical Cartridge reading through the custom FPGABuddy Board
-* A cool navigation by a rotary encoder and LCD on the FPGABuddy Board
-* It's able to read two [legacy D9 Joystick](https://en.wikipedia.org/wiki/Atari_CX40_joystick) and four paddles (ultra-low lattency db9_to_spi_san.v module and a custom hardware)
-* A custom internal ROM loader as a splash-screen, waiting for other game loading.
+## Key Features
+
+This customized version of the A2600Nano core introduces several key features:
+* **Physical Cartridge Support**: Ability to read physical Atari 2600 cartridges using the FPGABuddy cartridge slots.
+* **On-Screen Navigation**: Fluid user interface navigated via a rotary encoder and character LCD hosted on the FPGABuddy board.
+* **Legacy Controllers**: Dual DB9 joystick ports and support for up to four analog paddles with ultra-low latency via the custom [db9_to_spi_san.v](file:///x:/ATARI/A2600NanoSAN/src/db9_to_spi_san.v) module.
+* **Splash Screen Loader**: A custom internal ROM loader that acts as a splash screen while waiting for external game images to stream.
+
+---
 
 ## Core Details & Custom Modules
 
 ### 1. FPGABuddy SD Card & Cartridge Reader Integration
 
-The **A2600NanoSAN** core relies on **FPGABuddy**, an external companion board built around a **Raspberry Pi Pico (RP2040)** microcontroller. Instead of using complex logic on the FPGA to handle the FAT32 filesystem and SD card, the RP2040 serves as the absolute SPI Master:
+The **A2600NanoSAN** core relies on **FPGABuddy**, an external companion board built around a **Raspberry Pi Pico (RP2040)** microcontroller. Instead of implementing complex FAT32 filesystem and SD card logic on the FPGA, the RP2040 acts as the SPI Master:
 
 * **Direct ROM Streaming ([spi_loader_san.v](file:///x:/ATARI/A2600NanoSAN/src/spi_loader_san.v))**: When a game is selected, FPGABuddy pulls the FPGA's Chip Select line (`GP17` on Pico, Pin 56 on Tang Nano 20k) LOW and sends **Target 0x03 (SDC)** followed by **Command 0x08 (ROM_STREAM)**.
 * **FPGA Reset Control**: The FPGA slave module (`spi_loader_san.v`) intercepts this command, activates `ioctl_download` to keep the Atari CPU in Reset, and streams ROM data directly into the FPGA mapper RAM ([Gowin_SDPB](file:///x:/ATARI/A2600NanoSAN/src/gowin_sdpb/gowin_sdpb_san.vhd)).
 * **Auto Boot**: Once transmission completes and Chip Select goes HIGH, the FPGA takes the Atari CPU out of Reset, booting the game instantly.
-* **Physical Cartridge Reading**: FPGABuddy includes dedicated cartridge reader pins (**GP8 to GP11** on the RP2040) configured in Slave mode to dump physical Atari 2600 cartridges externally. These dumps are streamed to the FPGA RAM using the same SPI streaming protocol, allowing real physical cartridges to run on the FPGA.
+* **Physical Cartridge Reading**: FPGABuddy features dedicated cartridge reader pins on the RP2040 configured in slave mode. Physical cartridge ROMs are dumped externally and streamed to the FPGA's internal RAM over SPI, enabling support for real Atari 2600 cartridges.
 * **MISO Tri-state Resolution**: The FPGA's MISO output is held in high-impedance (`'Z'`) whenever Chip Select is inactive (HIGH), allowing FPGABuddy to share the SPI0 bus with its onboard SD card reader without electrical conflicts.
 
 ### 2. Ultra-Low Latency DB9-to-SPI Controller
@@ -54,8 +59,7 @@ The system must be powered using a **5V, 2A power supply** connected via USB-C t
 
 ## Synthesis
 
-Source code can be synthesized, fitted and programmed with GOWIN IDE Windows or Linux.  
-Alternatively use the command line build script **gw_sh.exe** build_tn20k.tcl  
+The source code can be synthesized, fitted, and programmed using the GOWIN IDE on Windows or Linux. Alternatively, use the command-line build script: `gw_sh.exe build_tn20k.tcl`.
 
 ---
 
