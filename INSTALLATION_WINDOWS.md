@@ -1,121 +1,80 @@
-# Installation using a Windows PC
+# Installation Guide (A2600NanoSAN)
 
-This document explains how to install all the necessary files on the
-Tang Nano 20K and the M0S Dock in order to use it as a A2600Nano
-device.
+This document explains how to flash and set up the necessary files for the **A2600NanoSAN** core on the **Tang Nano 20k** FPGA and the **FPGABuddy (RP2040)** companion board.
 
-This has been tested on Windows 11. It should work on older versions too.
+This setup has been tested on Windows 10/11.
 
-Software needed:
+---
 
-  - [Gowin V1.9.11.03](https://www.gowinsemi.com/en/support/home/) **to synthesize the core**
-  - [Gowin V1.9.11.03](https://www.gowinsemi.com/en/support/home/) **to program the flash of the TANG FPGA**
-  - [BouffaloLabDevCube](https://dev.bouffalolab.com/download) **to flash the BL616**
-  - [Latest release](https://github.com/vossstef/A2600nano/releases/latest) of A2600Nano **FPGA** bitstream
-  - [Latest release](http://github.com/harbaum/FPGA-Companion/releases/latest) of FPGA companion firmware **µC firmware** (if not otherwise stated in the release note.)
-  - [Latest release](https://dl.sipeed.com/shareURL/TANG/Debugger/onboard/BL616) of the TANG onboard µC bl616 programmer firmware
+## 1. Prerequisites & Software Needed
 
-In order to use the SD card:
+### FPGA Synthesis & Programming
+* [Gowin V1.9.11.03 (or newer)](https://www.gowinsemi.com/en/support/home/): Needed to synthesize the core or use the Gowin Programmer tool to flash the FPGA.
+* The compiled bitstream: `impl/pnr/a2600nano_tn20k_san.fs`.
 
-  - Cartridge images 
+### FPGABuddy Firmware & Utilities
+* The FPGABuddy firmware binary: `fpgabuddy.uf2` (compiled from the FPGABuddy project repository).
+* Python 3.x (to run database generation and renaming scripts).
+* *Note: Unlike the generic A2600Nano core, the onboard BL616 microcontroller on the Tang Nano 20k is NOT flashed with companion firmware. It is left with its factory firmware to serve strictly as the USB-JTAG programmer for the FPGA.*
 
-# Flashing the Tang Nano 20k
+### Storage
+* A Micro SD Card (formatted in FAT32) to insert into the **FPGABuddy** board.
+* Atari 2600 ROM files (`.bin`, `.a26`).
 
-First download the Gowin IDE. The Education version is sufficient and
-won't need a licence.
+---
 
-Install the IDE on your system (follow the installation instructions
-from Gowin).  After the Installation you should have it as an shortcut
-on your desktop or in your start menu.
+## 2. Flashing the Tang Nano 20k FPGA
 
- - Press the ```S2``` button on the Tang Nano 20K and keep it pressed
- - Connect the Tang Nano 20k to the USB on your computer. You should hear the connecting sound of Windows.
- - Release the ```S2``` button
- - Start Gowin. **You should see the following screen**
+### Option A: Using Gowin Programmer GUI
+1. Connect the Tang Nano 20k to your PC via USB-C.
+2. Open the **Gowin Programmer** tool.
+3. Click the **Scan Device** button to detect the FPGA.
+4. Set the programming parameters:
+   - **Access Mode**: `SRAM Program` (for temporary testing) or `Embedded Flash Mode` (to persist the core).
+   - **File name**: Select `impl/pnr/a2600nano_tn20k_san.fs`.
+   - **Address**: `0x000000`.
+5. Click the **Play** (Program) icon. You should see a progress bar and a "Successful" message.
 
-![](https://github.com/vossstef/A2600Nano/blob/main/.assets/gowin1.jpg)
+### Option B: Using Command Line (PowerShell/Cmd)
+Run the Gowin Programmer CLI to flash the bitstream directly to the embedded flash:
+```bash
+programmer_cli -r 36 --fsFile impl/pnr/a2600nano_tn20k_san.fs --spiaddr 0x000000 --cable-index 1 --d GW2AR-18C
+```
 
-Now press on the “programmer” marked red on the picture above. **You
-should see following screen:**
+---
 
-![](https://github.com/vossstef/A2600Nano/blob/main/.assets/device.png)
+## 3. Flashing the FPGABuddy (RP2040)
 
--   Press save on the dialog
--   From there you can add a device for programming by pressing on the little
-    icon with the green plus
--   At least one file have to be flashed:
-    - The core itself: ```a2600nano_tn20k.fs```
--   Than you can choose from the drop downs the parameter you see on the
-    pictures.
+The FPGABuddy companion board uses a Raspberry Pi Pico (RP2040) to offload the SD card and OSD menus. Flashing is simple and does not require third-party tools:
 
-**Important**:
+1. Unplug the FPGABuddy board from power/USB.
+2. Press and hold the **BOOTSEL** button on the Raspberry Pi Pico.
+3. Connect the Pico to your PC via USB-C while holding the button, then release it.
+4. The PC will detect a new USB mass storage drive named **RPI-RP2**.
+5. Copy or drag-and-drop the `fpgabuddy.uf2` file directly onto the **RPI-RP2** drive.
+6. Once copied, the Pico will automatically reboot, flash itself, and start the FPGABuddy companion firmware.
 
-  - ```a2600nano_tn20k.fs``` is written to address 0x000000
+---
 
+## 4. Preparing the SD Card
 
-  - For the FS file please choose the ```a2600nano_tn20k.fs``` you just downloaded
-  - User Code and IDCODE can be ignored
-  - Mark each of your configs and press the little icon with the green play
-    button. You should see a progress bar and then:
+The SD card is handled entirely by the FPGABuddy companion board:
 
-![](https://github.com/vossstef/A2600Nano/blob/main/.assets/c64_flash.png)
-**At a glance the memory layout of the SPI Flash:**
-|                           | |          |          |         | | |
-|-                          |-         |-         |-         |-        |-|-|
-| Type                      | TN20k    | TP20k    |TP25k     | TM138k/TC138k  |TM60k/TC60k | |
-| FPGA bitstream            | 0x000000 | 0x000000 | 0x000000 | 0x000000 |0x000000|ROM size |
+1. Format the Micro SD card to **FAT32**.
+2. **Generate the ROM Database**:
+   - The FPGABuddy project includes Python scripts to compile a curated SQLite database of Atari 2600 games into a flat binary database file called **`roms.bin`**.
+   - Generate this file using the Python scripts and copy **`roms.bin`** to the root of your Micro SD card.
+3. **Organize and Rename your ROMs**:
+   - Copy your Atari 2600 ROM files (`.bin` or `.a26` files) onto the card (they can be placed in subdirectories).
+   - FPGABuddy will also provide Python renaming scripts (to be made available in the FPGABuddy repository) to automatically rename your ROM files using their calculated **MD5 checksum** (e.g., `<calculated_md5>.bin`).
+   - FPGABuddy uses the file name (the MD5 hash) to look up the game's official name, mapper type, and other metadata indexed inside **`roms.bin`**.
+4. Insert the SD card into the Micro SD slot on the **FPGABuddy board**.
 
-You might need to use an older version of the Gowin Programmer [SW](https://dl.sipeed.com/shareURL/TANG/programmer) for the GW1NR device.<br>
+---
 
-**shell / command line Programming alternative**
+## 5. Wiring & Hardware Connection
 
-Windows shell and Gowin Programmer<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tn9k.fs   --cable-index 1 --d GW1NR-9C```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tn20k.fs --spiaddr 0x000000 --cable-index 1 --d GW2AR-18C```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tp20k.fs --spiaddr 0x000000 --cable-index 1 --d GW2A-18C```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tp25k.fs --spiaddr 0x000000 --cable-index 1 --d GW5A-25A```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tm60k.fs --spiaddr 0x000000 --cable-index 1 --d GW5AT-60B```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tm138k_pro.fs --spiaddr 0x000000 --cable-index 1 --d GW5AST-138B```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tc60k.fs --spiaddr 0x000000 --cable-index 1 --d GW5AT-60B```<br>
-```programmer_cli  -r 36 --fsFile a2600nano_tc138k.fs --spiaddr 0x000000 --cable-index 1 --d GW5AST-138B```<br>
-
-**That´s it for the Tang Nano 20k**
-
-## Flashing the BL616 µC
-
-For the BL616 you have to extract and start the BuffaloLabDevCube. 
-
-**If you use the internal BL616 present on the Tang Nano 20K you loose
-your possibility to flash the Tang over the USB connection.** It is thus
-strongly recommended to use an external BL616 (e.g. a M0S Dock).
-
-However, when using the internal BL616 you will be able to flash the
-[original firmware](https://github.com/harbaum/MiSTeryNano/blob/main/bl616/friend_20k)
-to the internal BL616 again to restore the flasher functionality of
-the Tang Nano 20K. Using an external M0S is nevertheless recommended.
-
--   Press the ```BOOT``` button on your M0S Dock before you plug the USB connection
-    on your PC. You should hear the hardware detecting sound.
--   Start the BuffaloLabDevCube from the directory where you decompressed it it
-    ask you what chip should be used. Select BL616/BL618 and press “finish”
-
-![](https://github.com/vossstef/A2600Nano/blob/main/.assets/buffstart.png)
-
-- You'll now see the program screen. On the right it should auto detect your
-  device with a COM port. If not take a look in the device manager to check for
-  the correct device detection.
-- On the top click on MCU and browse to the firmware image file named
-  ```fpga_companion_bl616.bin``` (contains a unified firmware)
-- Choose “Open Uart” and than press “Create & Download”. The firmware should now be
-  flashed
-
-![](https://github.com/vossstef/A2600Nano/blob/main/.assets/bufffinish.png)
-
-## Prepare the SD card
-
-Format the SD card in FAT32. Copy your cartrige files files on
-it. You can organize your files in subdirectories.  
-These files can later be selected using the on-screen-display (OSD).  
-Copy a 2600 rom cartrige image to your sdcard and rename it to **a2600crt.bin** as default boot image.
-
-
+Ensure the hardware components are connected correctly:
+1. **FPGABuddy SPI Link**: Connect the 5-pin PMOD SPI interface on FPGABuddy to the companion pins on the Tang Nano 20k (Pins 41, 42, 51, 54, 56).
+2. **DB9-to-SPI Board**: Connect the SPI interface of the DB9-to-SPI board to Gamepad Port 1 on the Tang Nano 20k (Pins 52, 53, 71, 72).
+3. **Power Source**: Connect a **5V, 2A USB-C power supply** to either the FPGABuddy board or the Tang Nano 20k.
