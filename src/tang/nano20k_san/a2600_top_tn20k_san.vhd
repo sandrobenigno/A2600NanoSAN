@@ -25,12 +25,12 @@ entity A2600_top is
   --uart_tx     : out std_logic;
     -- monitor port
     bl616_mon_tx : out std_logic;
-    -- SPI interface external uC
-    pmod_companion_din : in std_logic;
-    pmod_companion_dout : out std_logic;
-    pmod_companion_ss : in std_logic;
-    pmod_companion_clk : in std_logic;
-    pmod_companion_intn : out std_logic;
+    -- FPGABuddy Interface (SPI)
+    fpgabuddy_mosi      : in std_logic;
+    fpgabuddy_miso      : out std_logic;
+    fpgabuddy_csn       : in std_logic;
+    fpgabuddy_sclk      : in std_logic;
+    fpgabuddy_irqn      : out std_logic;
     -- SPI connection to onboard BL616
     spi_sclk    : in std_logic;
     spi_csn     : in std_logic;
@@ -48,17 +48,12 @@ entity A2600_top is
     sd_dat      : inout std_logic_vector(3 downto 0);
     ws2812      : out std_logic;
 
-    -- Gamepad Dualshock @Joystick to DIP
-    ds_clk          : out std_logic;
-    ds_mosi         : out std_logic;
-    ds_miso         : in std_logic;
-    ds_cs           : out std_logic;
-
-    -- Gamepad Dualshock @Spare Header on MisteryShield20k
-    ds_clk_ms20k    : out std_logic;
-    ds_mosi_ms20k   : out std_logic;
-    ds_miso_ms20k   : in std_logic;
-    ds_cs_ms20k     : out std_logic
+    -- DB9-to-SPI Board (Gamepad 1 Port)
+    db9_spi_sclk        : out std_logic;
+    db9_spi_mosi        : out std_logic;
+    db9_spi_miso        : in std_logic;
+    db9_spi_csn         : out std_logic
+    -- Note: Gamepad 2 ports (Pin 73 ds_clk_ms20k, Pin 74 ds_mosi_ms20k, Pin 77 ds_miso_ms20k, Pin 31 ds_cs_ms20k) were removed and released for other uses.
     );
 end;
 
@@ -352,19 +347,19 @@ begin
     if rising_edge(clk) then
       if pll_locked = '0' then
         spi_ext <= '0';
-      elsif pmod_companion_ss = '0' then
+      elsif fpgabuddy_csn = '0' then
         spi_ext <= '1';
       end if;
     end if;
   end process;
 
-  spi_io_din <= pmod_companion_din when spi_ext = '1' else spi_dat;
-  spi_io_ss <= pmod_companion_ss when spi_ext = '1' else spi_csn;
-  spi_io_clk <= pmod_companion_clk when spi_ext = '1' else spi_sclk;
+  spi_io_din <= fpgabuddy_mosi when spi_ext = '1' else spi_dat;
+  spi_io_ss <= fpgabuddy_csn when spi_ext = '1' else spi_csn;
+  spi_io_clk <= fpgabuddy_sclk when spi_ext = '1' else spi_sclk;
   spi_dir <= spi_io_dout;
   spi_irqn <= spi_intn;
-  pmod_companion_dout <= spi_io_dout when pmod_companion_ss = '0' else 'Z'; -- Mod: Mudando pra alta impedância
-  pmod_companion_intn <= spi_intn;
+  fpgabuddy_miso <= spi_io_dout when fpgabuddy_csn = '0' else 'Z'; -- Mod: Mudando pra alta impedância
+  fpgabuddy_irqn <= spi_intn;
 
 -- SBenigno's module (replacement of DS2 Joy, implementing the 1003KHz dual joytick aproach)
 db9_spi_inst: entity work.db9_to_spi_san
@@ -374,10 +369,10 @@ db9_spi_inst: entity work.db9_to_spi_san
         vsync        => vsync,
         hsync        => hsync,
         
-        ds_clk       => ds_clk,
-        ds_mosi      => ds_mosi,
-        ds_miso      => ds_miso,
-        ds_cs        => ds_cs,
+        db9_spi_clk  => db9_spi_sclk,
+        db9_spi_mosi => db9_spi_mosi,
+        db9_spi_miso => db9_spi_miso,
+        db9_spi_cs   => db9_spi_csn,
         
         joy1_up      => key_up,
         joy1_down    => key_down,
@@ -419,10 +414,7 @@ db9_spi_inst: entity work.db9_to_spi_san
     key_lstick    <= '0';
     key_rstick    <= '0';
     
-    -- Drive the unused physical gamepad 2 outputs to high/inactive state
-    ds_clk_ms20k  <= '1';
-    ds_mosi_ms20k <= '0';
-    ds_cs_ms20k   <= '1';
+    -- Note: Gamepad 2 pins (Pins 73, 74, 77, 31) are no longer driven as their ports were deleted.
 
 led_ws2812: entity work.ws2812
   port map

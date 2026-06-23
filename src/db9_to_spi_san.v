@@ -13,10 +13,10 @@
 //     Reads full controller state including Joystick 2 directions.
 //
 //   Physical Pins (Tang Nano 20k Gamepad 1):
-//   - Pino 52: ds_clk  (SPI SCLK)
-//   - Pino 53: ds_mosi (SPI MOSI)
-//   - Pino 71: ds_miso (SPI MISO)
-//   - Pino 72: ds_cs   (SPI SS/CS)
+//   - Pino 52: db9_spi_clk  (SPI SCLK)
+//   - Pino 53: db9_spi_mosi (SPI MOSI)
+//   - Pino 71: db9_spi_miso (SPI MISO)
+//   - Pino 72: db9_spi_cs   (SPI SS/CS)
 //
 //   SPI Payload Mapping (Active-Low from Slave):
 //   - Byte 0: [7:6] Res, [5] Joy2 Fire, [4] Joy1 Fire, [3] J1 Right, [2] J1 Left, [1] J1 Down, [0] J1 Up
@@ -32,10 +32,10 @@ module db9_to_spi_san (
     input hsync,           // horizontal sync (active high)
     
     // SPI Physical Pins
-    output reg ds_clk,     // Pin 52
-    output reg ds_mosi,    // Pin 53
-    input ds_miso,         // Pin 71
-    output reg ds_cs,      // Pin 72
+    output reg db9_spi_clk,     // Pin 52
+    output reg db9_spi_mosi,    // Pin 53
+    input db9_spi_miso,         // Pin 71
+    output reg db9_spi_cs,      // Pin 72
     
     // Decoded Outputs (Active-High for VHDL Core)
     output reg joy1_up,
@@ -85,7 +85,7 @@ module db9_to_spi_san (
 
     // Clock Divider: Generates spi_tick every 14 cycles of the 28.8 MHz clock.
     // 28.8 MHz / 14 = 2.057 MHz tick rate.
-    // Since each SPI clock cycle (ds_clk) requires 2 ticks (Low/High), 
+    // Since each SPI clock cycle (db9_spi_clk) requires 2 ticks (Low/High), 
     // the resulting SPI clock frequency is: 2.057 MHz / 2 = ~1.028 MHz.
     always @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -141,9 +141,9 @@ module db9_to_spi_san (
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             state      <= S_IDLE;
-            ds_clk     <= 1'b1; // Idle High
-            ds_mosi    <= 1'b0;
-            ds_cs      <= 1'b1; // Idle High
+            db9_spi_clk     <= 1'b1; // Idle High
+            db9_spi_mosi    <= 1'b0;
+            db9_spi_cs      <= 1'b1; // Idle High
             bit_cnt    <= 3'd0;
             byte_cnt   <= 3'd0;
             max_bytes  <= 3'd5;
@@ -168,9 +168,9 @@ module db9_to_spi_san (
         end else if (spi_tick) begin
             case (state)
                 S_IDLE: begin
-                    ds_clk  <= 1'b1;
-                    ds_mosi <= 1'b0;
-                    ds_cs   <= 1'b1;
+                    db9_spi_clk  <= 1'b1;
+                    db9_spi_mosi <= 1'b0;
+                    db9_spi_cs   <= 1'b1;
                     bit_cnt <= 3'd0;
                     byte_cnt <= 3'd0;
                     
@@ -188,21 +188,21 @@ module db9_to_spi_san (
                 end
 
                 S_CS_LOW: begin
-                    ds_cs <= 1'b0; // Activate CS
+                    db9_spi_cs <= 1'b0; // Activate CS
                     state <= S_CLK_LOW;
                 end
 
                 S_CLK_LOW: begin
-                    ds_clk  <= 1'b0; // SCLK Falling Edge (Shift out MOSI)
+                    db9_spi_clk  <= 1'b0; // SCLK Falling Edge (Shift out MOSI)
                     // MSB-first transmission
-                    ds_mosi <= tx_byte[7 - bit_cnt];
+                    db9_spi_mosi <= tx_byte[7 - bit_cnt];
                     state   <= S_CLK_HIGH;
                 end
 
                 S_CLK_HIGH: begin
-                    ds_clk <= 1'b1; // SCLK Rising Edge (Sample MISO)
+                    db9_spi_clk <= 1'b1; // SCLK Rising Edge (Sample MISO)
                     // MSB-first reception
-                    rx_byte[7 - bit_cnt] <= ds_miso;
+                    rx_byte[7 - bit_cnt] <= db9_spi_miso;
                     
                     if (bit_cnt == 3'd7) begin
                         state <= S_BYTE_DONE;
@@ -228,8 +228,8 @@ module db9_to_spi_san (
                 end
 
                 S_CS_HIGH: begin
-                    ds_cs   <= 1'b1; // Deactivate CS
-                    ds_mosi <= 1'b0;
+                    db9_spi_cs   <= 1'b1; // Deactivate CS
+                    db9_spi_mosi <= 1'b0;
                     
                     // Parse and latch received data to stable outputs (Inputs are Active-Low, invert to Active-High)
                     // Byte 0 contains fires for both joysticks and directions for Joystick 1
