@@ -48,9 +48,14 @@ wire	   osd_pix;
 wire [5:0] osd_pix_col;
 
 // background is darker where "shadow" is active
-wire [5:0] osd_r = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0000, r_in[5:4]}:{3'b000, r_in[5:3]};
-wire [5:0] osd_g = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0100, g_in[5:4]}:{3'b010, g_in[5:3]};
-wire [5:0] osd_b = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0000, b_in[5:4]}:{3'b000, b_in[5:3]};  
+//wire [5:0] osd_r = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0000, r_in[5:4]}:{3'b000, r_in[5:3]};
+//wire [5:0] osd_g = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0100, g_in[5:4]}:{3'b010, g_in[5:3]};
+//wire [5:0] osd_b = (tactive && osd_pix)?osd_pix_col:sactive?{4'b0000, b_in[5:4]}:{3'b000, b_in[5:3]};  
+
+// background is darker where "shadow" is active (Bright LCD Blue-Cyan SAN)
+wire [5:0] osd_r = (tactive && osd_pix)?osd_pix_col:sactive?{3'b000, r_in[5:3]}:{2'b00, r_in[5:2]};
+wire [5:0] osd_g = (tactive && osd_pix)?osd_pix_col:sactive?{3'b010, g_in[5:3]}:{2'b01, g_in[5:2]}; // Verde aceso (Offset 16)
+wire [5:0] osd_b = (tactive && osd_pix)?osd_pix_col:sactive?{3'b100, b_in[5:3]}:{2'b10, b_in[5:2]}; // Azul super aceso (Offset 32)
 
 assign osd_status = enabled;
 assign r_out = r_out_i;
