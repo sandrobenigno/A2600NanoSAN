@@ -59,7 +59,7 @@ The system must be powered using a **5V, 2A power supply** connected via USB-C t
 
 ## Synthesis
 
-The source code can be synthesized, fitted, and programmed using the GOWIN IDE on Windows or Linux. Alternatively, use the command-line build script: `gw_sh.exe build_tn20k.tcl`.
+The source code can be synthesized, fitted, and programmed using the GOWIN IDE on Windows or Linux. Alternatively, use the command-line build script: `gw_sh.exe build_tn20k_san.tcl`.
 
 ---
 
@@ -68,18 +68,18 @@ The source code can be synthesized, fitted, and programmed using the GOWIN IDE o
 ### Pinmap Tang Nano 20k to FPGABuddy (PMOD SPI)
 | FPGA Pin | Core Signal Name | Function | Direction |
 | :--- | :--- | :--- | :--- |
-| **41** | `pmod_companion_din` | SPI MOSI | Input |
-| **42** | `pmod_companion_dout`| SPI MISO | Output |
-| **54** | `pmod_companion_clk` | SPI SCK | Input |
-| **56** | `pmod_companion_ss`  | SPI CSn | Input |
-| **51** | `pmod_companion_intn`| Interrupt IRQn | Output |
+| **41** | `fpgabuddy_mosi` | SPI MOSI | Input |
+| **42** | `fpgabuddy_miso` | SPI MISO | Output |
+| **54** | `fpgabuddy_sclk` | SPI SCK | Input |
+| **56** | `fpgabuddy_csn`  | SPI CSn | Input |
+| **51** | `fpgabuddy_irqn` | Interrupt IRQn | Output |
 
 ### Pinmap Tang Nano 20k to DB9-to-SPI Board (Gamepad 1 Port)
 | FPGA Pin | Core Signal Name | Function | Direction |
 | :--- | :--- | :--- | :--- |
-| **52** | `ds_clk` | SPI SCK | Output |
-| **53** | `ds_mosi`| SPI MOSI | Output |
-| **71** | `ds_miso`| SPI MISO | Input |
-| **72** | `ds_cs`  | SPI CSn | Output |
+| **52** | `db9_spi_sclk` | SPI SCK | Output |
+| **53** | `db9_spi_mosi` | SPI MOSI | Output |
+| **71** | `db9_spi_miso` | SPI MISO | Input |
+| **72** | `db9_spi_csn`  | SPI CSn | Output |
 
-*Note: The second physical gamepad port pins (`ds_clk_ms20k`, etc.) are left disconnected in the FPGA core, as both joysticks and four paddles are multiplexed over the main SPI bus.*
+*Note: The second physical gamepad port pins (previously `ds_clk_ms20k`, etc. on pins 73, 74, 77, and 31) have been completely removed and released from the FPGA core.*
