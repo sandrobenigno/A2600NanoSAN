@@ -65,7 +65,7 @@ The source code can be synthesized, fitted, and programmed using the GOWIN IDE o
 
 ## HW Circuit Considerations
 
-### Pinmap Tang Nano 20k to FPGABuddy (PMOD SPI)
+### Pinmap Tang Nano 20k to FPGABuddy (MCU SPI)
 | FPGA Pin | Core Signal Name | Function | Direction |
 | :--- | :--- | :--- | :--- |
 | **41** | `fpgabuddy_mosi` | SPI MOSI | Input |
@@ -74,7 +74,7 @@ The source code can be synthesized, fitted, and programmed using the GOWIN IDE o
 | **56** | `fpgabuddy_csn`  | SPI CSn | Input |
 | **51** | `fpgabuddy_irqn` | Interrupt IRQn | Output |
 
-### Pinmap Tang Nano 20k to DB9-to-SPI Board (Gamepad 1 Port)
+### Pinmap Tang Nano 20k to DB9-to-SPI Board (Game Controller SPI)
 | FPGA Pin | Core Signal Name | Function | Direction |
 | :--- | :--- | :--- | :--- |
 | **52** | `db9_spi_sclk` | SPI SCK | Output |
