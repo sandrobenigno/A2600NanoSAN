@@ -10,6 +10,8 @@ It is designed for the following hardware configuration:
 
 This project requires connecting a custom coprocessor board running dedicated firmware: [FPGABuddy](https://github.com/sandrobenigno/FPGABuddy).
 
+![#wiring](images/pin_wiring.jpg)
+
 ## Key Features
 
 This customized version of the A2600Nano core introduces several key features:
