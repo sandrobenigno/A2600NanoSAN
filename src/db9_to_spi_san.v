@@ -4,13 +4,13 @@
 // By Sandro Benigno (EvilPlaymobil)
 // Description: 
 //   SPI Master controller for DB9-to-SPI gamepad adapter on Tang Nano 20k.
-//   Operates at ~1.03 MHz SPI clock from the 28.8 MHz core clock (MSB-first, Mode 3).
+//   Operates at ~720 kHz SPI clock from the 28.8 MHz core clock (MSB-first, Mode 3).
 //   
-//   Optimized Dual-Mode Polling:
-//   - Fast Scanline Poll (Command 0x01, 5 Bytes) triggered on HSYNC rising edge.
-//     Reads Joysticks Fire buttons, Joystick 1 directions, and all 4 paddles.
-//   - Full VBlank Poll (Command 0x02, 6 Bytes) triggered on VSYNC rising edge.
-//     Reads full controller state including Joystick 2 directions.
+//   Aggressive Smart Polling:
+//   - VBlank Poll (Command 0x02, 2 Bytes): Triggered on VSYNC rising edge.
+//     Reads all joystick/fire button states (Byte 0: Joy1+Fires, Byte 1: Joy2 directions).
+//   - Fast Scanline Poll (Command 0x01, 4 Bytes): Triggered on HSYNC rising edge (only if paddle_mode active).
+//     Reads the 4 analog paddle positions. Excludes digital buttons to minimize transmission time (44.4 µs).
 //
 //   Physical Pins (Tang Nano 20k Gamepad 1):
 //   - Pino 52: db9_spi_clk  (SPI SCLK)
@@ -30,6 +30,7 @@ module db9_to_spi_san (
     input rst,             // active high reset
     input vsync,           // vertical sync (active high)
     input hsync,           // horizontal sync (active high)
+    input paddle_mode,     // 1 = Paddle Mode active, 0 = Joystick Mode active
     
     // SPI Physical Pins
     output reg db9_spi_clk,     // Pin 52
@@ -71,7 +72,7 @@ module db9_to_spi_san (
 
     reg [2:0] bit_cnt;      // 0 to 7
     reg [2:0] byte_cnt;     // 0 to 5
-    reg [2:0] max_bytes;    // 5 (Comando 0x01) or 6 (Comando 0x02)
+    reg [2:0] max_bytes;    // 2 (Command 0x02) or 4 (Command 0x01)
     reg [7:0] tx_byte;      // Command byte to send
     reg [7:0] rx_byte;      // Data byte received
     reg [7:0] rx_buffer [0:5];
@@ -83,16 +84,16 @@ module db9_to_spi_san (
     reg hsync_trig;
     reg in_vsync;
 
-    // Clock Divider: Generates spi_tick every 14 cycles of the 28.8 MHz clock.
-    // 28.8 MHz / 14 = 2.057 MHz tick rate.
+    // Clock Divider: Generates spi_tick every 20 cycles of the 28.8 MHz clock.
+    // 28.8 MHz / 20 = 1.44 MHz tick rate.
     // Since each SPI clock cycle (db9_spi_clk) requires 2 ticks (Low/High), 
-    // the resulting SPI clock frequency is: 2.057 MHz / 2 = ~1.028 MHz.
+    // the resulting SPI clock frequency is: 1.44 MHz / 2 = ~720 kHz.
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             clk_cnt  <= 5'd0;
             spi_tick <= 1'b0;
         end else begin
-            if (clk_cnt >= 5'd13) begin
+            if (clk_cnt >= 5'd19) begin
                 clk_cnt  <= 5'd0;
                 spi_tick <= 1'b1;
             end else begin
@@ -129,9 +130,9 @@ module db9_to_spi_san (
 
             // Clear trigger signals when FSM starts processing them
             if (state == S_CS_LOW) begin
-                if (max_bytes == 3'd6)
+                if (tx_byte == 8'h02)
                     vsync_trig <= 1'b0;
-                else
+                else if (tx_byte == 8'h01)
                     hsync_trig <= 1'b0;
             end
         end
@@ -146,7 +147,7 @@ module db9_to_spi_san (
             db9_spi_cs      <= 1'b1; // Idle High
             bit_cnt    <= 3'd0;
             byte_cnt   <= 3'd0;
-            max_bytes  <= 3'd5;
+            max_bytes  <= 3'd2;
             tx_byte    <= 8'h00;
             rx_byte    <= 8'h00;
             
@@ -175,13 +176,13 @@ module db9_to_spi_san (
                     byte_cnt <= 3'd0;
                     
                     if (vsync_trig) begin
-                        // Start Full VBlank Poll (Comando 0x02 - 6 Bytes)
-                        max_bytes <= 3'd6;
+                        // VBlank Poll: Always 2 Bytes (Command 0x02)
+                        max_bytes <= 3'd2;
                         tx_byte   <= 8'h02;
                         state     <= S_CS_LOW;
-                    end else if (hsync_trig && !in_vsync) begin
-                        // Start Fast Scanline Poll (Comando 0x01 - 5 Bytes)
-                        max_bytes <= 3'd5;
+                    end else if (hsync_trig && !in_vsync && paddle_mode) begin
+                        // Fast Scanline Poll: 4 Bytes of Paddles (Command 0x01), only if paddle_mode active
+                        max_bytes <= 3'd4;
                         tx_byte   <= 8'h01;
                         state     <= S_CS_LOW;
                     end
@@ -231,34 +232,25 @@ module db9_to_spi_san (
                     db9_spi_cs   <= 1'b1; // Deactivate CS
                     db9_spi_mosi <= 1'b0;
                     
-                    // Parse and latch received data to stable outputs (Inputs are Active-Low, invert to Active-High)
-                    // Byte 0 contains fires for both joysticks and directions for Joystick 1
-                    joy1_up    <= ~rx_buffer[0][0];
-                    joy1_down  <= ~rx_buffer[0][1];
-                    joy1_left  <= ~rx_buffer[0][2];
-                    joy1_right <= ~rx_buffer[0][3];
-                    joy1_fire  <= ~rx_buffer[0][4];
-                    joy2_fire  <= ~rx_buffer[0][5];
+                    if (max_bytes == 3'd2) begin
+                        // Parse VBlank Poll: Byte 0 (Joy1 + Fires) and Byte 1 (Joy2 directions)
+                        joy1_up    <= ~rx_buffer[0][0];
+                        joy1_down  <= ~rx_buffer[0][1];
+                        joy1_left  <= ~rx_buffer[0][2];
+                        joy1_right <= ~rx_buffer[0][3];
+                        joy1_fire  <= ~rx_buffer[0][4];
+                        joy2_fire  <= ~rx_buffer[0][5];
 
-                    if (max_bytes == 3'd6) begin
-                        // Comando 0x02 read full frame (Joystick 2 directions in Byte 1)
                         joy2_up    <= ~rx_buffer[1][0];
                         joy2_down  <= ~rx_buffer[1][1];
                         joy2_left  <= ~rx_buffer[1][2];
                         joy2_right <= ~rx_buffer[1][3];
-
-                        // Paddles are in bytes 2..5
-                        paddle1 <= rx_buffer[2];
-                        paddle2 <= rx_buffer[3];
-                        paddle3 <= rx_buffer[4];
-                        paddle4 <= rx_buffer[5];
-                    end else begin
-                        // Comando 0x01 (Fast Scanline): Keep previous Joystick 2 directions stable
-                        // Paddles are in bytes 1..4
-                        paddle1 <= rx_buffer[1];
-                        paddle2 <= rx_buffer[2];
-                        paddle3 <= rx_buffer[3];
-                        paddle4 <= rx_buffer[4];
+                    end else if (max_bytes == 3'd4) begin
+                        // Parse Fast Scanline Poll: Bytes 0..3 are Paddles 1..4
+                        paddle1 <= rx_buffer[0];
+                        paddle2 <= rx_buffer[1];
+                        paddle3 <= rx_buffer[2];
+                        paddle4 <= rx_buffer[3];
                     end
 
                     state <= S_IDLE;

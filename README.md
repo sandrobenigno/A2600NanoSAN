@@ -36,10 +36,10 @@ The **A2600NanoSAN** core relies on **FPGABuddy**, an external companion board b
 
 Physical controller input is handled by a custom external **DB9-to-SPI board** running an **Arduino** SPI Slave. This replaces the standard DualShock 2 controller logic to interface with two legacy Atari DB9 joysticks and four analog paddles.
 
-The master controller module [db9_to_spi_san.v](file:///x:/ATARI/A2600NanoSAN/src/db9_to_spi_san.v) on the FPGA operates at **~1.03 MHz** (derived from the 28.8 MHz core clock divided by 14, MSB-first, SPI Mode 3) and uses an **Optimized Dual-Mode Polling** mechanism:
+The master controller module [db9_to_spi_san.v](file:///x:/ATARI/A2600NanoSAN/src/db9_to_spi_san.v) on the FPGA operates at **~720 kHz** (derived from the 28.8 MHz core clock divided by 20, MSB-first, SPI Mode 3) and implements **Aggressive Smart Polling**:
 
-* **Fast Scanline Poll (Command 0x01, 5 Bytes)**: Triggered on every rising edge of **HSYNC**. It reads Joystick 1 directions/fire, Joystick 2 fire (Byte 0), and all 4 analog paddles (Bytes 1-4). The transmission takes just **53.33 µs**, executing safely within the **63.5 µs** scanline window.
-* **Full VBlank Poll (Command 0x02, 6 Bytes)**: Triggered on every rising edge of **VSYNC**. It reads the full controller state, including Joystick 2 directions (Byte 1) and all 4 paddles (Bytes 2-5).
+* **VBlank Poll (Command 0x02, 2 Bytes)**: Triggered on every rising edge of **VSYNC** (always, in both joystick and paddle modes). It reads all joystick directions and fire buttons (Byte 0: Joy1+Fires, Byte 1: Joy2 directions/fires). The transmission takes just **22.2 µs**.
+* **Fast Scanline Poll (Command 0x01, 4 Bytes)**: Triggered on every rising edge of **HSYNC** (only if `paddle_mode` is active). It reads only the 4 analog paddle positions, completely omitting button data to minimize transmission time down to **44.4 µs** (creating a comfortable **19 µs** safety margin inside the **63.5 µs** scanline window). Joystick Mode turns HSync polling off completely, reducing SPI interrupts by **99.8%**.
 
 ### 3. Multicolor RGB Status LED (WS2812)
 

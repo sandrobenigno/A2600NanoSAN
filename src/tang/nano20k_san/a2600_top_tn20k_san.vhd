@@ -81,10 +81,10 @@ signal joyDigital   : std_logic_vector(15 downto 0);
 signal joyNumpad    : std_logic_vector(15 downto 0);
 signal joyMouse     : std_logic_vector(15 downto 0);
 signal numpad       : std_logic_vector(7 downto 0);
-signal joyDS2_p1    : std_logic_vector(15 downto 0);
-signal joyDS2_p2    : std_logic_vector(15 downto 0);
-signal joyDS2A_p1   : std_logic_vector(15 downto 0);
-signal joyDS2A_p2   : std_logic_vector(15 downto 0);
+signal joyDB9_SPI_p1   : std_logic_vector(15 downto 0);
+signal joyDB9_SPI_p2   : std_logic_vector(15 downto 0);
+signal joyDB9_SPIA_p1  : std_logic_vector(15 downto 0);
+signal joyDB9_SPIA_p2  : std_logic_vector(15 downto 0);
 -- joystick interface
 signal joyA        : std_logic_vector(15 downto 0);
 signal joyB        : std_logic_vector(15 downto 0);
@@ -268,6 +268,7 @@ signal cart_download   : std_logic;
 signal bs_unsupported  : std_logic;
 signal paddle_ena12    : std_logic := '0';
 signal paddle_ena34    : std_logic := '0';
+signal paddle_mode_active : std_logic := '0'; -- active when paddle 1/2 or paddle 3/4 are enabled
 signal paddle_1_analogA : std_logic := '0';
 signal paddle_1_analogB : std_logic := '0';
 signal paddle_2_analogA : std_logic := '0';
@@ -361,13 +362,16 @@ begin
   fpgabuddy_miso <= spi_io_dout when fpgabuddy_csn = '0' else 'Z'; -- Mod: Mudando pra alta impedância
   fpgabuddy_irqn <= spi_intn;
 
--- SBenigno's module (replacement of DS2 Joy, implementing the 1003KHz dual joytick aproach)
+  paddle_mode_active <= paddle_ena12 or paddle_ena34;
+
+-- SBenigno's module (replacement of DS2 Joy, implementing the 720KHz smart polling approach)
 db9_spi_inst: entity work.db9_to_spi_san
     port map (
         clk          => clk,
         rst          => reset2600,
         vsync        => vsync,
         hsync        => hsync,
+        paddle_mode  => paddle_mode_active,
         
         db9_spi_clk  => db9_spi_sclk,
         db9_spi_mosi => db9_spi_mosi,
@@ -644,14 +648,14 @@ leds(5 downto 1) <= "11111" when force_bs > 14 else "00000"; -- indicate unsuppo
 
 -- p1 DualShock 2 @Joystick to DIP
 -- p2 DualShock 2 @MisteryShield20k
-joyDS2_p1  <= key_rstick & key_lstick & key_r2 & key_l2 & key_start & key_select & key_r1 & key_l1 &
-              key_square & key_triangle & key_cross & key_circle & key_up & key_down & key_left & key_right;
-joyDS2_p2  <= key_rstick2 & key_lstick2 & key_r22 & key_l22 & key_start2 & key_select2 & key_r12 & key_l12 &
-              key_square2 & key_triangle2 & key_cross2 & key_circle2 & key_up2 & key_down2 & key_left2 & key_right2;
-joyDS2A_p1 <= key_rstick & key_lstick & key_r2 & key_l2 & key_start & key_select & key_r1 & key_l1 &
-              key_square & key_triangle & "00" & "0000";
-joyDS2A_p2 <= key_rstick2 & key_lstick2 & key_r22 & key_l22 & key_start2 & key_select2 & key_r12 & key_l12 &
-              key_square2 & key_triangle2 & "00" & "0000";
+joyDB9_SPI_p1   <= key_rstick & key_lstick & key_r2 & key_l2 & key_start & key_select & key_r1 & key_l1 &
+                   key_square & key_triangle & key_cross & key_circle & key_up & key_down & key_left & key_right;
+joyDB9_SPI_p2   <= key_rstick2 & key_lstick2 & key_r22 & key_l22 & key_start2 & key_select2 & key_r12 & key_l12 &
+                   key_square2 & key_triangle2 & key_cross2 & key_circle2 & key_up2 & key_down2 & key_left2 & key_right2;
+joyDB9_SPIA_p1  <= key_rstick & key_lstick & key_r2 & key_l2 & key_start & key_select & key_r1 & key_l1 &
+                   key_square & key_triangle & "00" & "0000";
+joyDB9_SPIA_p2  <= key_rstick2 & key_lstick2 & key_r22 & key_l22 & key_start2 & key_select2 & key_r12 & key_l12 &
+                   key_square2 & key_triangle2 & "00" & "0000";
 joyDigital <= not(x"FF" & "11" & io(5) & io(0) & io(2) & io(1) & io(4) & io(3));
 -- Logitech Rumble Pad 2
 joyUsb1    <= "0000" &
@@ -724,11 +728,11 @@ begin
         paddle_ena12  <= '0';
         paddle_1_analogA <= '0';
         paddle_2_analogA <= '0';
-      when "0100"  => joyA <= joyDS2_p1; -- 4
+      when "0100"  => joyA <= joyDB9_SPI_p1; -- 4
         paddle_ena12  <= '0';
         paddle_1_analogA <= '0';
         paddle_2_analogA <= '0';
-      when "0101"  => joyA <= joyDS2_p2; -- 5
+      when "0101"  => joyA <= joyDB9_SPI_p2; -- 5
         paddle_ena12  <= '0';
         paddle_1_analogA <= '0';
         paddle_2_analogA <= '0';
@@ -744,11 +748,11 @@ begin
         paddle_ena12  <= '1';
         paddle_1_analogA <= '0';
         paddle_2_analogA <= '0';
-      when "1001"  => joyA <= joyDS2A_p1;-- 9
+      when "1001"  => joyA <= joyDB9_SPIA_p1;-- 9
         paddle_ena12  <= '1';
         paddle_1_analogA <= '1';
         paddle_2_analogA <= '0';
-      when "1010"  => joyA <= joyDS2A_p2;-- 10
+      when "1010"  => joyA <= joyDB9_SPIA_p2;-- 10
         paddle_ena12  <= '1';
         paddle_2_analogA <= '1';
         paddle_1_analogA <= '0';
@@ -775,11 +779,11 @@ begin
         paddle_ena34  <= '0';
         paddle_1_analogB <= '0';
         paddle_2_analogB <= '0';
-      when "0100"  => joyB <= joyDS2_p1; -- 4
+      when "0100"  => joyB <= joyDB9_SPI_p1; -- 4
         paddle_ena34  <= '0';
         paddle_1_analogB <= '0';
         paddle_2_analogB <= '0';
-      when "0101"  => joyB <= joyDS2_p2; -- 5
+      when "0101"  => joyB <= joyDB9_SPI_p2; -- 5
         paddle_ena34  <= '0';
         paddle_1_analogB <= '0';
         paddle_2_analogB <= '0';
@@ -795,11 +799,11 @@ begin
         paddle_ena34  <= '1';
         paddle_1_analogB <= '0';
         paddle_2_analogB <= '0';
-      when "1001"  => joyB <= joyDS2A_p1;-- 9
+      when "1001"  => joyB <= joyDB9_SPIA_p1;-- 9
         paddle_ena34  <= '1';
         paddle_1_analogB <= '1';
         paddle_2_analogB <= '0';
-      when "1010"  => joyB <= joyDS2A_p2;-- 10
+      when "1010"  => joyB <= joyDB9_SPIA_p2;-- 10
         paddle_ena34  <= '1';
         paddle_2_analogB <= '1';
         paddle_1_analogB <= '0';
