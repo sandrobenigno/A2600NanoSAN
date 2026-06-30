@@ -18,7 +18,7 @@ This customized version of the A2600Nano core introduces several key features:
 * **Physical Cartridge Support**: Ability to read physical Atari 2600 cartridges using the FPGABuddy cartridge slots.
 * **On-Screen Navigation**: Fluid user interface navigated via a rotary encoder and character LCD hosted on the FPGABuddy board.
 * **Legacy Controllers**: Dual DB9 joystick ports and support for up to four analog paddles with ultra-low latency via the custom [db9_to_spi_san.v](file:///x:/ATARI/A2600NanoSAN/src/db9_to_spi_san.v) module.
-* **Splash Screen Loader**: A custom internal ROM loader that acts as a splash screen while waiting for external game images to stream.
+* **Splash Screen**: A custom internal ROM that acts as a splash screen while waiting for external game images to stream.
 
 ---
 
