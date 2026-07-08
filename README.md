@@ -1,5 +1,7 @@
 # A2600NanoSAN
 
+_[English](README.md) | [Português](README.pt-BR.md)_
+
 The **A2600NanoSAN** is a custom Atari 2600 VCS core implementation. It is based on the [A2600Nano](https://github.com/MiSTle-Dev/A2600Nano) core, which is a port of the [MiSTer Atari 2600](https://github.com/MiSTer-devel/Atari2600_MiSTer) FPGA core components. 
 
 It is designed for the following hardware configuration:
