@@ -53,6 +53,14 @@ The companion board updates the FPGA's onboard WS2812 status LED (Pin 79) by sen
 2. **STATE_JOGANDO (Active Console)**: Onboard LED glows **Blue** (`rgb(0, 0, 127)`).
 3. **STATE_CONFIGURANDO (OSD Settings)**: Onboard LED glows **Red** (`rgb(127, 0, 0)`).
 
+### 4. Dynamic VSync Stabilizer Mode
+
+To prevent video sync loss in games with tight horizontal kernels and irregular VSync generation (e.g., *Turmoil*, *Moonsweeper*), this core exposes the physical VSync stabilizer mode selection via the System Control configuration register (under ID `T`), which can be set over SPI by the companion MCU (in our case, FPGABuddy):
+
+* **Smart** (00): Dynamically tracks and adapts to the scanline count on a frame-by-frame basis (standard behavior).
+* **Fixed** (01): Locks the stabilizer to a fixed 262-line NTSC grid to prevent stabilization feedback loops.
+* **None** (10): Bypasses the stabilizer entirely, passing raw TIA vertical sync pulses directly to the output.
+
 ---
 
 ## Powering
