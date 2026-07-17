@@ -55,7 +55,7 @@ A placa companion atualiza o LED de status WS2812 integrado no FPGA (Pin 79) env
 
 ### 4. Modo Estabilizador de VSync Dinâmico
 
-Para evitar perda de sincronismo de vídeo em jogos com kernels horizontais muito apertados e geração irregular de VSync (ex: *Turmoil*, *Moonsweeper*), este core expõe a seleção do modo de estabilizador de VSync físico através do registrador de configuração do System Control (sob o ID `T`), podendo ser ajustado via SPI pelo MCU companion (no nosso caso, o FPGABuddy):
+Para evitar perda de sincronismo de vídeo em jogos com kernels horizontais muito apertados e geração irregular de VSync, este core expõe a seleção do modo de estabilizador de VSync físico através do registrador de configuração do System Control (sob o ID `T`), podendo ser ajustado via SPI pelo MCU companion (no nosso caso, o FPGABuddy):
 
 * **Smart** (00): Rastreia dinamicamente e se adapta ao número de scanlines quadro a quadro (comportamento padrão).
 * **Fixed** (01): Trava o estabilizador em uma grade fixa NTSC de 262 linhas para evitar loops de feedback na estabilização.
