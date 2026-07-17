@@ -159,6 +159,8 @@ signal spi_io_ss      : std_logic;
 signal spi_io_clk     : std_logic;
 signal spi_io_dout    : std_logic;
 signal system_screen  : std_logic_vector(1 downto 0);
+-- Mod by SAN: VSync stabilizer mode (00 = smart, 01 = fixed, 10 = none)
+signal system_video_stab : std_logic_vector(1 downto 0);
 signal leds           : std_logic_vector(5 downto 0);
 signal system_leds    : std_logic_vector(1 downto 0);
 signal db9_joy        : std_logic_vector(5 downto 0);
@@ -488,6 +490,8 @@ port map(
       system_screen => system_screen,
       system_scanlines => system_scanlines,
       system_volume => system_volume,
+      -- Mod by SAN: VSync stabilizer mode
+      system_video_stab => system_video_stab,
 
       tmds_clk_n => tmds_clk_n,
       tmds_clk_p => tmds_clk_p,
@@ -983,6 +987,8 @@ module_inst: entity work.sysctrl
   system_sc           => system_sc,
   system_video_std    => system_video_std,
   system_joyswap      => joyswap,
+  -- Mod by SAN: VSync stabilizer mode
+  system_video_stab   => system_video_stab,
 
   -- port io (used to expose rs232)
   port_status         => (others => '0'),

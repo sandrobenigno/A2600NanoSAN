@@ -49,7 +49,9 @@ module sysctrl (
   output reg        system_vblank,
   output reg        system_vm,
   output reg [1:0]  system_sc,
-  output reg        system_joyswap
+  output reg        system_joyswap,
+  // Mod by SAN: VSync stabilizer mode (00 = smart, 01 = fixed, 10 = none)
+  output reg [1:0]  system_video_stab
 );
 
 reg [3:0] state;
@@ -125,6 +127,8 @@ always @(posedge clk) begin
       system_vm <= 1'b0;
       system_sc <= 2'b11;
       system_joyswap <= 1'b0;
+      // Mod by SAN: default VSync stabilizer mode is 00 (smart)
+      system_video_stab <= 2'b00;
    end else begin // if (reset)
       //  bring button state into local clock domain
       buttonsD <= buttons;
@@ -237,6 +241,8 @@ always @(posedge clk) begin
                     if(id == "A") system_volume <= data_in[1:0];
                     // Value "W": normal 4:3 screen (0), wide 16:9 screen (1)
                     if(id == "W") system_screen <= data_in[1:0];
+                    // Mod by SAN: Value "T": VSync stabilizer mode (00=smart, 01=fixed, 10=none)
+                    if(id == "T") system_video_stab <= data_in[1:0];
                 end
             end
 
