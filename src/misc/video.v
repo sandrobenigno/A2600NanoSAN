@@ -54,7 +54,7 @@ video_stabilize video_stabilize
 	.reset(!pll_lock),  // System reset
 	.oclk(clk),         // Oscillator clock aka pixel clock or color clock
 	// Mod by SAN: set stabilizer mode from sysctrl
-	.mode(system_video_stab),       // 00 = smart, 01 = fixed, 10 = none
+	.mode(system_video_stab),  // 00 = smart, 01 = fixed, 10 = none
 	.vsync_in(vs_in_n), // Unmodified vsync signal
 	.vblank_in(vb_in),  // Umodified vblank signal
 	.hsync_in(hs_in_n), // Unmodified hsync signal
