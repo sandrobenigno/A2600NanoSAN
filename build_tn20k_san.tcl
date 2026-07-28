@@ -21,6 +21,8 @@ add_file src/misc/scandoubler.v
 add_file src/misc/sd_card.v
 add_file src/misc/sd_rw.v
 add_file src/misc/sdcmd_ctrl.v
+add_file src/misc/sdram.v
+add_file src/misc/frame_buffer.sv
 add_file src/misc/sysctrl.v
 add_file src/misc/video.v
 add_file src/misc/video_analyzer.v

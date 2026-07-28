@@ -34,6 +34,22 @@ module video (
           // Mod by SAN: VSync stabilizer mode (00 = smart, 01 = fixed, 10 = none)
           input [1:0]  system_video_stab,
 
+          // Mod by SAN: bypass when loading cart (no SDRAM frame buffering during download)
+          input        fb_bypass,
+
+          // SDRAM frame buffer interface (connected to embedded GW2AR-18C SDRAM)
+          inout [31:0]  IO_sdram_dq,
+          output [10:0] O_sdram_addr,
+          output [1:0]  O_sdram_ba,
+          output        O_sdram_cs_n,
+          output        O_sdram_ras_n,
+          output        O_sdram_cas_n,
+          output        O_sdram_wen_n,
+          output        O_sdram_clk,
+          output        O_sdram_cke,
+          output [3:0]  O_sdram_dqm,
+          input         clk_sdram,   // 180°-phase-shifted clock for SDRAM
+
 	      // hdmi/tdms
 	      output	   tmds_clk_n,
 	      output	   tmds_clk_p,
@@ -48,6 +64,7 @@ wire sd_hs_n, sd_vs_n;
 wire [8:0] total_lines;
 assign paldetect = pal;
 
+// video_stabilize receives RAW TIA signals (unchanged) for PAL detection
 video_stabilize video_stabilize
 (
 	.clk(clk),          // system clock
@@ -65,6 +82,82 @@ video_stabilize video_stabilize
 	.auto_pal(pal),
 	.f1(),
     .tlines(total_lines)
+);
+
+// -------- SDRAM frame buffer (ping-pong) --------
+// Captures TIA frames into SDRAM and replays them with FIXED height
+// to the scandoubler, eliminating frame-height variation.
+
+wire        fb_rd_hsync, fb_rd_vsync, fb_rd_hblank, fb_rd_vblank;
+wire [7:0]  fb_rd_r, fb_rd_g, fb_rd_b;
+
+wire        fb_sdram_rd, fb_sdram_wr, fb_sdram_refresh;
+wire [22:0] fb_sdram_addr;
+wire [31:0] fb_sdram_din;
+wire [31:0] fb_sdram_dout;
+wire        fb_sdram_data_ready;
+wire        fb_sdram_busy;
+
+frame_buffer frame_buffer (
+    .clk     (clk),
+    .resetn  (pll_lock),
+    .bypass  (fb_bypass),
+
+    // TIA input (raw signals — timing reference for frame capture)
+    .wr_hsync  (!hs_in_n),    // hs_in_n is active-low → invert to active-high
+    .wr_vsync  (!vs_in_n),    // same
+    .wr_hblank (hb_in),
+    .wr_vblank (vb_in),
+    .wr_r      ({r_in, 4'b0}),
+    .wr_g      ({g_in, 4'b0}),
+    .wr_b      ({b_in, 4'b0}),
+    .pal       (pal),
+
+    // Output → scandoubler
+    .rd_hsync  (fb_rd_hsync),
+    .rd_vsync  (fb_rd_vsync),
+    .rd_hblank (fb_rd_hblank),
+    .rd_vblank (fb_rd_vblank),
+    .rd_r      (fb_rd_r),
+    .rd_g      (fb_rd_g),
+    .rd_b      (fb_rd_b),
+
+    // SDRAM controller
+    .sdram_rd         (fb_sdram_rd),
+    .sdram_wr         (fb_sdram_wr),
+    .sdram_refresh    (fb_sdram_refresh),
+    .sdram_addr       (fb_sdram_addr),
+    .sdram_din        (fb_sdram_din),
+    .sdram_dout       (fb_sdram_dout),
+    .sdram_data_ready (fb_sdram_data_ready),
+    .sdram_busy       (fb_sdram_busy)
+);
+
+sdram #(.FREQ(28_800_000)) sdram_ctrl (
+    // Embedded SDRAM chip pins (GW2AR-18C SIP, no .cst needed)
+    .SDRAM_DQ  (IO_sdram_dq),
+    .SDRAM_A   (O_sdram_addr),
+    .SDRAM_BA  (O_sdram_ba),
+    .SDRAM_nCS (O_sdram_cs_n),
+    .SDRAM_nRAS(O_sdram_ras_n),
+    .SDRAM_nCAS(O_sdram_cas_n),
+    .SDRAM_nWE (O_sdram_wen_n),
+    .SDRAM_CLK (O_sdram_clk),
+    .SDRAM_CKE (O_sdram_cke),
+    .SDRAM_DQM (O_sdram_dqm),
+
+    // Logic interface
+    .clk        (clk),
+    .clk_sdram  (clk_sdram),
+    .resetn     (pll_lock),
+    .rd         (fb_sdram_rd),
+    .wr         (fb_sdram_wr),
+    .refresh    (fb_sdram_refresh),
+    .addr       (fb_sdram_addr),
+    .din        (fb_sdram_din),
+    .dout       (fb_sdram_dout),
+    .data_ready (fb_sdram_data_ready),
+    .busy       (fb_sdram_busy)
 );
 
 // generate 48khz audio clock
@@ -187,25 +280,30 @@ end
 wire [5:0] sd_r;
 wire [5:0] sd_g;
 wire [5:0] sd_b;
-  
+
+// VBlank for scandoubler: when vblank_regenerate active, use generated vbl;
+// otherwise use frame_buffer output (which already handles fixed-height vblank).
+// Note: fb_rd_vblank is already stabilized; we still respect vblank_regenerate.
+wire VBlank_fb = vblank_regenerate ? vbl_gen : fb_rd_vblank;
+
 scandoubler #(10) scandoubler (
         // system interface
         .clk_sys(clk),
-        .bypass(1'b0),      // bypass in ST high/mono
+        .bypass(1'b0),
         .ce_divider(3'd1),
         .pixel_ena(),
 
         // scanlines (00-none 01-25% 10-50% 11-75%)
         .scanlines(system_scanlines),
 
-        // shifter video interface
-        .hb_in(hb_in),
-	    .vb_in(VBlank), // vb_in),
-        .hs_in(hs_in_n),
-        .vs_in(vs_stab),
-        .r_in( r_in ),
-        .g_in( g_in ),
-        .b_in( b_in ),
+        // shifter video interface — NOW fed by frame_buffer output
+        .hb_in(fb_rd_hblank),
+	    .vb_in(VBlank_fb),
+        .hs_in(fb_rd_hsync),
+        .vs_in(fb_rd_vsync),
+        .r_in(fb_rd_r[7:4]),
+        .g_in(fb_rd_g[7:4]),
+        .b_in(fb_rd_b[7:4]),
 
         // output interface
         .hb_out(),

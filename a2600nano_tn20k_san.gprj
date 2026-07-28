@@ -26,6 +26,8 @@
         <File path="src/misc/sd_card.v" type="file.verilog" enable="1"/>
         <File path="src/misc/sd_rw.v" type="file.verilog" enable="1"/>
         <File path="src/misc/sdcmd_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/misc/sdram.v" type="file.verilog" enable="1"/>
+        <File path="src/misc/frame_buffer.sv" type="file.verilog" enable="1"/>
         <File path="src/misc/sysctrl.v" type="file.verilog" enable="1"/>
         <File path="src/misc/video.v" type="file.verilog" enable="1"/>
         <File path="src/misc/video_analyzer.v" type="file.verilog" enable="1"/>

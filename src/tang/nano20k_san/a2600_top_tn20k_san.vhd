@@ -52,8 +52,21 @@ entity A2600_top is
     db9_spi_sclk        : out std_logic;
     db9_spi_mosi        : out std_logic;
     db9_spi_miso        : in std_logic;
-    db9_spi_csn         : out std_logic
+    db9_spi_csn         : out std_logic;
     -- Note: Gamepad 2 ports (Pin 73 ds_clk_ms20k, Pin 74 ds_mosi_ms20k, Pin 77 ds_miso_ms20k, Pin 31 ds_cs_ms20k) were removed and released for other uses.
+
+    -- Embedded SDRAM (GW2AR-18C SIP internal — Gowin EDA routes these internally)
+    -- No .cst pin assignments needed; port names must match Gowin SDRAM conventions.
+    O_sdram_clk   : out std_logic;
+    O_sdram_cke   : out std_logic;
+    O_sdram_cs_n  : out std_logic;
+    O_sdram_cas_n : out std_logic;
+    O_sdram_ras_n : out std_logic;
+    O_sdram_wen_n : out std_logic;
+    O_sdram_dqm   : out std_logic_vector(3 downto 0);
+    O_sdram_addr  : out std_logic_vector(10 downto 0);
+    O_sdram_ba    : out std_logic_vector(1 downto 0);
+    IO_sdram_dq   : inout std_logic_vector(31 downto 0)
     );
 end;
 
@@ -64,11 +77,14 @@ signal clk_cpu        : std_logic;
 signal clk_14         : std_logic;
 signal pll_locked     : std_logic;
 signal clk_pixel_x5   : std_logic;
+signal clk_pixel_x5p  : std_logic; -- 180° phase-shifted (rPLL CLKOUTP)
+signal clk_sdram      : std_logic; -- 28.8 MHz, 180° phase-shifted for SDRAM
 attribute syn_keep : integer;
 attribute syn_keep of clk_cpu      : signal is 1;
 attribute syn_keep of clk          : signal is 1;
 attribute syn_keep of clk_14       : signal is 1;
 attribute syn_keep of clk_pixel_x5 : signal is 1;
+attribute syn_keep of clk_sdram    : signal is 1;
 
   -- keyboard
 signal keyboard_matrix_out : std_logic_vector(7 downto 0);
@@ -493,6 +509,24 @@ port map(
       -- Mod by SAN: VSync stabilizer mode
       system_video_stab => system_video_stab,
 
+      -- Mod by SAN: bypass frame buffer during cart download
+      fb_bypass  => cart_download,
+
+      -- SDRAM frame buffer: connect to top-level entity ports
+      -- Gowin EDA routes these to the embedded SDRAM inside GW2AR-18C SIP.
+      -- Port name convention (O_sdram_*, IO_sdram_dq) is required by Gowin tools.
+      IO_sdram_dq   => IO_sdram_dq,
+      O_sdram_addr  => O_sdram_addr,
+      O_sdram_ba    => O_sdram_ba,
+      O_sdram_cs_n  => O_sdram_cs_n,
+      O_sdram_ras_n => O_sdram_ras_n,
+      O_sdram_cas_n => O_sdram_cas_n,
+      O_sdram_wen_n => O_sdram_wen_n,
+      O_sdram_clk   => O_sdram_clk,
+      O_sdram_cke   => O_sdram_cke,
+      O_sdram_dqm   => O_sdram_dqm,
+      clk_sdram  => clk_sdram,
+
       tmds_clk_n => tmds_clk_n,
       tmds_clk_p => tmds_clk_p,
       tmds_d_n   => tmds_d_n,
@@ -546,7 +580,7 @@ generic map (
         port map (
             CLKOUT   => clk_pixel_x5,
             LOCK     => pll_locked,
-            CLKOUTP  => open, -- 90deg shifted
+            CLKOUTP  => clk_pixel_x5p,  -- 180° phase-shifted; divide by 5 → clk_sdram
             CLKOUTD  => open,
             CLKOUTD3 => open,
             RESET    => '0',
@@ -560,6 +594,19 @@ generic map (
             DUTYDA   => (others => '0'),
             FDLY     => (others => '1')
         );
+
+-- Divide CLKOUTP (144 MHz, 180°) by 5 to get clk_sdram (28.8 MHz, 180° relative to clk)
+sdram_clkdiv: CLKDIV
+generic map(
+    DIV_MODE => "5",
+    GSREN    => "false"
+)
+port map(
+    CLKOUT => clk_sdram,
+    HCLKIN => clk_pixel_x5p,
+    RESETN => pll_locked,
+    CALIB  => '0'
+);
 
 div1_inst: CLKDIV
 generic map(
