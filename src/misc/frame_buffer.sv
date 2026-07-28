@@ -266,11 +266,14 @@ always @(posedge clk or negedge resetn) begin
         if (rd_active && !rd_vblank_in) begin
             pclk_div <= pclk_div + 1;
 
+            // Pré-busca do próximo endereço BRAM no ciclo 14 para compensar a latência de 1 ciclo da BRAM
+            if (pclk_div == 4'd14 && rd_wcnt < WORDS_PER_LINE - 1) begin
+                lb_raddr <= rd_wcnt + 1;
+            end
+
             if (pclk_div == 4'd15) begin
                 pclk_div <= 0;
                 rd_wcnt  <= rd_wcnt + 1;
-                if (rd_wcnt < WORDS_PER_LINE - 1)
-                    lb_raddr <= rd_wcnt + 1;
             end
 
             // Se a linha ou coluna atual estiver fora do intervalo gravado do frame anterior, força preto
