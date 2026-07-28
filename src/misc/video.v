@@ -3,6 +3,7 @@
 module video (
           input	   clk,
           input    clk_pixel_x5,
+          input    clk_cpu,
           input    pll_lock,
 
           input    vb_in,
@@ -88,7 +89,7 @@ video_stabilize video_stabilize
 // Captures TIA frames into SDRAM and replays them with FIXED height
 // to the scandoubler, eliminating frame-height variation.
 
-wire        fb_rd_hsync, fb_rd_vsync, fb_rd_hblank, fb_rd_vblank;
+// frame_buffer outputs only pixel data (no timing signals)
 wire [7:0]  fb_rd_r, fb_rd_g, fb_rd_b;
 
 wire        fb_sdram_rd, fb_sdram_wr, fb_sdram_refresh;
@@ -100,12 +101,12 @@ wire        fb_sdram_busy;
 
 frame_buffer frame_buffer (
     .clk     (clk),
+    .clk_cpu (clk_cpu),
     .resetn  (pll_lock),
     .bypass  (fb_bypass),
 
-    // TIA input (raw signals — timing reference for frame capture)
-    .wr_hsync  (!hs_in_n),    // hs_in_n is active-low → invert to active-high
-    .wr_vsync  (!vs_in_n),    // same
+    // TIA write side (captura frames na SDRAM)
+    .wr_vsync  (!vs_in_n),   // vsync active-high
     .wr_hblank (hb_in),
     .wr_vblank (vb_in),
     .wr_r      ({r_in, 4'b0}),
@@ -113,14 +114,14 @@ frame_buffer frame_buffer (
     .wr_b      ({b_in, 4'b0}),
     .pal       (pal),
 
-    // Output → scandoubler
-    .rd_hsync  (fb_rd_hsync),
-    .rd_vsync  (fb_rd_vsync),
-    .rd_hblank (fb_rd_hblank),
-    .rd_vblank (fb_rd_vblank),
-    .rd_r      (fb_rd_r),
-    .rd_g      (fb_rd_g),
-    .rd_b      (fb_rd_b),
+    // Read side: timing externo (video_stabilize controla tudo)
+    .rd_hblank_in (hb_in),    // hblank TIA (timing horizontal)
+    .rd_vblank_in (vb_stab),  // vblank estabilizado pelo video_stabilize
+
+    // Saída de pixel (somente cor — sem timing)
+    .rd_r (fb_rd_r),
+    .rd_g (fb_rd_g),
+    .rd_b (fb_rd_b),
 
     // SDRAM controller
     .sdram_rd         (fb_sdram_rd),
@@ -133,7 +134,11 @@ frame_buffer frame_buffer (
     .sdram_busy       (fb_sdram_busy)
 );
 
-sdram #(.FREQ(28_800_000)) sdram_ctrl (
+sdram #(
+    .FREQ(28_800_000),
+    .T_RCD(4'd0),
+    .T_RP(4'd0)
+) sdram_ctrl (
     // Embedded SDRAM chip pins (GW2AR-18C SIP, no .cst needed)
     .SDRAM_DQ  (IO_sdram_dq),
     .SDRAM_A   (O_sdram_addr),
@@ -281,11 +286,8 @@ wire [5:0] sd_r;
 wire [5:0] sd_g;
 wire [5:0] sd_b;
 
-// VBlank for scandoubler: when vblank_regenerate active, use generated vbl;
-// otherwise use frame_buffer output (which already handles fixed-height vblank).
-// Note: fb_rd_vblank is already stabilized; we still respect vblank_regenerate.
-wire VBlank_fb = vblank_regenerate ? vbl_gen : fb_rd_vblank;
-
+// Timing do scandoubler: restaurado ao original (video_stabilize)
+// Pixels: frame_buffer (banco SDRAM anterior = 1 frame de atraso)
 scandoubler #(10) scandoubler (
         // system interface
         .clk_sys(clk),
@@ -296,11 +298,12 @@ scandoubler #(10) scandoubler (
         // scanlines (00-none 01-25% 10-50% 11-75%)
         .scanlines(system_scanlines),
 
-        // shifter video interface — NOW fed by frame_buffer output
-        .hb_in(fb_rd_hblank),
-	    .vb_in(VBlank_fb),
-        .hs_in(fb_rd_hsync),
-        .vs_in(fb_rd_vsync),
+        // Timing: ORIGINAL (video_stabilize) — inalterado
+        .hb_in(hb_in),
+        .vb_in(VBlank),
+        .hs_in(hs_in_n),
+        .vs_in(vs_stab),
+        // Pixels: frame_buffer (bypass → TIA direto; normal → SDRAM)
         .r_in(fb_rd_r[7:4]),
         .g_in(fb_rd_g[7:4]),
         .b_in(fb_rd_b[7:4]),
