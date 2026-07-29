@@ -174,8 +174,8 @@ always @(posedge clk or negedge resetn) begin
                     wf_dat [wf_wptr[1:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
                     wf_addr[wf_wptr[1:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
                     wf_wptr    <= wf_wptr + 1;
-                    wr_has_odd <= 0;
                 end
+                wr_has_odd <= 0; // Garantia absoluta: TODA linha sempre começa no Pixel 0!
                 
                 // Latch actual active screen boundaries (where wr_vblank was low during the line)
                 if (!wr_vblank) begin
@@ -339,13 +339,11 @@ always @(posedge clk or negedge resetn) begin
         // Nota: rd_lcnt é lido ANTES do incremento pelo read SM (mesma aresta)
         // Após o incremento, rd_lcnt_NEW = rd_lcnt_OLD + 1
         // Queremos fetch da linha rd_lcnt_NEW (que será exibida neste hblank)
-        if (rd_hblank_rise && frame_valid && !bypass && !wr_vsync_rise) begin
-            if (rd_lcnt != 0) begin
-                fetch_active    <= 1;
-                fetch_wcnt      <= 0;
-                fetch_state     <= FETCH_IDLE;
-                fetch_line      <= rd_lcnt;
-            end
+        if (rd_hblank_rise && frame_valid && !bypass) begin
+            fetch_active    <= 1;
+            fetch_wcnt      <= 0;
+            fetch_state     <= FETCH_IDLE;
+            fetch_line      <= rd_lcnt + 1;
         end
 
         // Vsync: fetch linha 0 para estar pronto antes do primeiro ativo
