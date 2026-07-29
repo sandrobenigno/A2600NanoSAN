@@ -97,12 +97,27 @@ wire [22:0] fb_sdram_addr;
 wire [31:0] fb_sdram_din;
 wire [31:0] fb_sdram_dout;
 wire        fb_sdram_data_ready;
-wire        fb_sdram_busy;
+reg [15:0] por_cnt = 0;
+reg        por_resetn = 0;
+
+always @(posedge clk or negedge pll_lock) begin
+    if (!pll_lock) begin
+        por_cnt    <= 0;
+        por_resetn <= 0;
+    end else begin
+        if (por_cnt < 16'd30000) begin // ~1.04ms @ 28.8MHz (>200us physical SDRAM requirement)
+            por_cnt    <= por_cnt + 1'b1;
+            por_resetn <= 0;
+        end else begin
+            por_resetn <= 1;
+        end
+    end
+end
 
 frame_buffer frame_buffer (
     .clk     (clk),
     .clk_cpu (clk_cpu),
-    .resetn  (pll_lock),
+    .resetn  (por_resetn),
     .bypass  (fb_bypass),
 
     // TIA write side (captura frames na SDRAM)
@@ -154,7 +169,7 @@ sdram #(
     // Logic interface
     .clk        (clk),
     .clk_sdram  (clk_sdram),
-    .resetn     (pll_lock),
+    .resetn     (por_resetn),
     .rd         (fb_sdram_rd),
     .wr         (fb_sdram_wr),
     .refresh    (fb_sdram_refresh),

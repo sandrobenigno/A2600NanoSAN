@@ -163,13 +163,14 @@ always @(posedge clk or negedge resetn) begin
                 bank_wr     <= ~bank_wr;
                 wr_has_odd  <= 0;
                 frame_valid <= 1;
+                wf_wptr     <= 0; // Garante FIFO zerada no início do quadro no Cold Boot!
                 wr_line_min <= wr_line_min_next;
                 wr_line_max <= wr_line_max_next;
                 wr_line_min_next <= 10'h3FF;
                 wr_line_max_next <= 0;
             end
 
-            if (wr_hblank_rise) begin
+            if (wr_hblank_rise && frame_valid) begin
                 if (wr_has_odd && !wf_full) begin
                     wf_dat [wf_wptr[1:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
                     wf_addr[wf_wptr[1:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
@@ -252,7 +253,6 @@ always @(posedge clk or negedge resetn) begin
             rd_active <= 1;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
-            lb_raddr  <= 0;
         end
 
         // Início do hblank: pré-carrega lb_raddr=0 para que lb_rdat já
@@ -281,6 +281,9 @@ always @(posedge clk or negedge resetn) begin
             // Se a linha ou coluna atual estiver fora do intervalo gravado do frame anterior, força preto
             if (rd_lcnt < wr_line_min || rd_lcnt > wr_line_max || rd_wcnt >= WORDS_PER_LINE) begin
                 rd_r <= 0; rd_g <= 0; rd_b <= 0;
+            end else if (pclk_div == 4'd15) begin
+                // No ciclo 15, mantém a cor do ciclo 14 enquanto a BRAM troca para a próxima palavra
+                rd_r <= rd_r; rd_g <= rd_g; rd_b <= rd_b;
             end else if (!pclk_div[3]) begin
                 rd_r <= {lb_rdat[15:12], lb_rdat[15:12]};
                 rd_g <= {lb_rdat[11:8],  lb_rdat[11:8]};
