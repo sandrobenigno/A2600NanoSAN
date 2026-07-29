@@ -252,6 +252,7 @@ always @(posedge clk or negedge resetn) begin
             rd_active <= 1;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
+            lb_raddr  <= 0;
         end
 
         // Início do hblank: pré-carrega lb_raddr=0 para que lb_rdat já
@@ -338,14 +339,13 @@ always @(posedge clk or negedge resetn) begin
         // Nota: rd_lcnt é lido ANTES do incremento pelo read SM (mesma aresta)
         // Após o incremento, rd_lcnt_NEW = rd_lcnt_OLD + 1
         // Queremos fetch da linha rd_lcnt_NEW (que será exibida neste hblank)
-        if (rd_hblank_rise && frame_valid && !bypass) begin
-            fetch_active    <= 1;
-            fetch_wcnt      <= 0;
-            fetch_state     <= FETCH_IDLE;
-            // rd_lcnt ainda não foi incrementado (nonblocking no outro always).
-            // rd_lcnt_NEW = rd_lcnt + 1 (exceto no vsync, mas vsync e hblank_rise
-            // não ocorrem simultaneamente em condições normais)
-            fetch_line <= rd_lcnt + 1;
+        if (rd_hblank_rise && frame_valid && !bypass && !wr_vsync_rise) begin
+            if (rd_lcnt != 0) begin
+                fetch_active    <= 1;
+                fetch_wcnt      <= 0;
+                fetch_state     <= FETCH_IDLE;
+                fetch_line      <= rd_lcnt;
+            end
         end
 
         // Vsync: fetch linha 0 para estar pronto antes do primeiro ativo
