@@ -252,7 +252,6 @@ always @(posedge clk or negedge resetn) begin
             rd_active <= 1;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
-            lb_raddr  <= 0;  // BRAM pronto 1 ciclo depois (latência compensada abaixo)
         end
 
         // Início do hblank: pré-carrega lb_raddr=0 para que lb_rdat já
@@ -364,12 +363,9 @@ always @(posedge clk or negedge resetn) begin
             lb_wen   <= 1;
         end
 
-        // Árbitro principal
+        // Árbitro principal: durante HBLANK, fetch da linha tem prioridade absoluta
         if (!sdram_busy) begin
-            if (refresh_due) begin
-                sdram_refresh <= 1;
-                refresh_due   <= 0;
-            end else if (fetch_active && fetch_state != FETCH_DONE) begin
+            if (fetch_active && fetch_state != FETCH_DONE) begin
                 case (fetch_state)
                     FETCH_IDLE: begin
                         if (fetch_wcnt < WORDS_PER_LINE) begin
@@ -381,10 +377,11 @@ always @(posedge clk or negedge resetn) begin
                             fetch_active <= 0; // finished the line fetch!
                         end
                     end
-                    // FETCH_WAIT: sdram_busy=1 enquanto esperamos; transitamos
-                    // no bloco else abaixo (quando busy=1 e data_ready=1)
                     default: ;
                 endcase
+            end else if (refresh_due) begin
+                sdram_refresh <= 1;
+                refresh_due   <= 0;
             end else if (!wf_empty) begin
                 sdram_addr <= wf_addr[wf_rptr[1:0]];
                 sdram_din  <= wf_dat [wf_rptr[1:0]];
