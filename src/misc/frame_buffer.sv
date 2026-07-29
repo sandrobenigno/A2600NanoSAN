@@ -274,6 +274,8 @@ always @(posedge clk or negedge resetn) begin
             if (pclk_div == 4'd15) begin
                 pclk_div <= 0;
                 rd_wcnt  <= rd_wcnt + 1;
+                if (rd_wcnt == WORDS_PER_LINE - 1)
+                    rd_active <= 0;
             end
 
             // Se a linha ou coluna atual estiver fora do intervalo gravado do frame anterior, força preto
