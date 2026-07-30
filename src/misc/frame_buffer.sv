@@ -190,8 +190,8 @@ always @(posedge clk or negedge resetn) begin
             end
 
             if (!wr_hblank && !wr_vblank) begin
-                // Sample at a stable phase (3'd7) of the 8-cycle TIA pixel period
-                if (wr_tick == 3'd7 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
+                // Amostragem direta no Ciclo 1 (wr_tick == 3'd1) da cor do TIA
+                if (wr_tick == 3'd1 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
                     if (!wr_has_odd) begin
                         wr_odd_pixel <= pack_px(wr_r, wr_g, wr_b);
                         wr_has_odd   <= 1;
