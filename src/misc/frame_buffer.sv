@@ -180,6 +180,8 @@ always @(posedge clk or negedge resetn) begin
                     wf_dat [wf_wptr[3:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
                     wf_addr[wf_wptr[3:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
                     wf_wptr    <= wf_wptr + 1;
+                end else begin
+                    wf_wptr    <= wf_rptr; // Esvazia a FIFO síncronamente antes da nova linha!
                 end
                 wr_has_odd <= 0; // Garantia absoluta: TODA linha sempre começa no Pixel 0!
                 
@@ -380,14 +382,9 @@ always @(posedge clk or negedge resetn) begin
             if (fetch_active && fetch_state != FETCH_DONE) begin
                 case (fetch_state)
                     FETCH_IDLE: begin
-                        if (fetch_wcnt < WORDS_PER_LINE) begin
-                            sdram_addr  <= make_addr(~bank_wr, fetch_line, {1'b0, fetch_wcnt});
-                            sdram_rd    <= 1;
-                            fetch_state <= FETCH_WAIT;
-                        end else begin
-                            fetch_state  <= FETCH_DONE;
-                            fetch_active <= 0; // finished the line fetch!
-                        end
+                        sdram_addr  <= make_addr(~bank_wr, fetch_line, 8'd0);
+                        sdram_rd    <= 1;
+                        fetch_state <= FETCH_WAIT;
                     end
                     default: ;
                 endcase
@@ -400,11 +397,17 @@ always @(posedge clk or negedge resetn) begin
                 sdram_wr   <= 1;
                 wf_rptr    <= wf_rptr + 1;
             end
-        end else begin
-            // SDRAM ocupado: avança fetch quando data chega
-            if (sdram_data_ready && fetch_state == FETCH_WAIT) begin
-                fetch_wcnt  <= fetch_wcnt + 1;
-                fetch_state <= FETCH_IDLE;
+        end
+
+        // Recepção dos dados em rajada (80 palavras contínuas) da SDRAM → BRAM
+        if (sdram_data_ready && fetch_state == FETCH_WAIT) begin
+            lb_wdat  <= sdram_dout_neg;
+            lb_waddr <= fetch_wcnt;
+            lb_wen   <= 1;
+            fetch_wcnt <= fetch_wcnt + 1;
+            if (fetch_wcnt == WORDS_PER_LINE - 1) begin
+                fetch_state  <= FETCH_DONE;
+                fetch_active <= 0; // Pre-fetch 100% concluído em 3.0 µs!
             end
         end
     end

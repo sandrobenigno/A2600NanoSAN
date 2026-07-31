@@ -96,6 +96,8 @@ reg [3:0]  wait_cnt;
 reg [22:0] addr_reg;
 reg [DATA_WIDTH-1:0] din_reg;
 reg        rd_reg, wr_reg, ref_reg;
+reg [6:0]  burst_cnt;
+reg [3:0]  rd_pipe;
 
 // Initialization counter (200µs @ 28.8MHz = 5760 cycles)
 reg [12:0] init_cnt;
@@ -196,9 +198,11 @@ always @(posedge clk or negedge resetn) begin
                     wait_cnt <= T_RC;
                     state    <= S_REFRESH;
                 end else if (rd_reg || rd) begin
-                    addr_reg <= rd ? addr : addr_reg;
-                    rd_reg   <= 0;
-                    busy     <= 1;
+                    addr_reg  <= rd ? addr : addr_reg;
+                    rd_reg    <= 0;
+                    busy      <= 1;
+                    burst_cnt <= 0;
+                    rd_pipe   <= 0;
                     // Activate row
                     set_cmd(CMD_ACTIVE);
                     SDRAM_BA <= rd ? addr[COL_WIDTH+BANK_WIDTH-1:COL_WIDTH] : addr_reg[COL_WIDTH+BANK_WIDTH-1:COL_WIDTH];
@@ -226,30 +230,22 @@ always @(posedge clk or negedge resetn) begin
                 if (wait_cnt != 0)
                     wait_cnt <= wait_cnt - 1;
                 else begin
-                    set_cmd(CMD_READ);
-                    // A[10]=1 → auto-precharge; A[9:8]=0; A[7:0]=column
-                    // ROW_WIDTH=11 bits: must be {1,0,0,col[7:0]} = 11 bits
-                    SDRAM_A  <= {1'b1, 2'b00, addr_reg[COL_WIDTH-1:0]};
-                    SDRAM_DQM<= 4'b0000;
-                    dq_oe    <= 0;
-                    wait_cnt <= CAS - 1;
-                    state    <= S_READ_D1;
-                end
-            end
+                    // Pipeline data_ready (3 cycles CAS latency)
+                    data_ready <= rd_pipe[2];
+                    rd_pipe    <= {rd_pipe[2:0], (burst_cnt < 7'd80)};
 
-            S_READ_D1: begin
-                if (wait_cnt != 0)
-                    wait_cnt <= wait_cnt - 1;
-                else begin
-                    // Data will be on DQ next cycle
-                    state <= S_READ_D2;
+                    if (burst_cnt < 7'd80) begin
+                        set_cmd(CMD_READ);
+                        // Column burst: A[10]=1 (Auto-Precharge) on word 79
+                        SDRAM_A   <= (burst_cnt == 7'd79) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
+                        SDRAM_DQM <= 4'b0000;
+                        dq_oe     <= 0;
+                        burst_cnt <= burst_cnt + 7'd1;
+                    end else if (rd_pipe == 0) begin
+                        wait_cnt <= T_RP;
+                        state    <= S_PRECHARGE2;
+                    end
                 end
-            end
-
-            S_READ_D2: begin
-                data_ready <= 1;  // dout is valid this cycle
-                wait_cnt   <= T_RP;
-                state      <= S_PRECHARGE2;
             end
 
             // ---- Write sequence ----
