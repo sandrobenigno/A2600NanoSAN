@@ -55,7 +55,8 @@ module sdram #(
     input  [DATA_WIDTH-1:0]     din,          // write data (32-bit)
     output [DATA_WIDTH-1:0]     dout,         // read data (32-bit)
     output reg                  data_ready,   // read data valid (1 cycle)
-    output reg                  busy          // controller busy
+    output reg                  busy,         // controller busy
+    output reg [6:0]            col_addr      // endereço da coluna atual em rajada
 );
 
 assign SDRAM_nCS  = 1'b0;   // always selected
@@ -211,10 +212,13 @@ always @(posedge clk or negedge resetn) begin
                     wait_cnt <= T_RCD;
                     state    <= S_READ;
                 end else if (wr_reg || wr) begin
-                    addr_reg <= wr ? addr : addr_reg;
-                    din_reg  <= wr ? din : din_reg;
-                    wr_reg   <= 0;
-                    busy     <= 1;
+                    addr_reg  <= wr ? addr : addr_reg;
+                    din_reg   <= wr ? din : din_reg;
+                    wr_reg    <= 0;
+                    busy      <= 1;
+                    burst_cnt <= 0;
+                    col_addr  <= 0; // Pré-carrega o endereço 0 no wr_raddr durante o T_RCD!
+                    // Activate row
                     set_cmd(CMD_ACTIVE);
                     SDRAM_BA <= wr ? addr[COL_WIDTH+BANK_WIDTH-1:COL_WIDTH] : addr_reg[COL_WIDTH+BANK_WIDTH-1:COL_WIDTH];
                     SDRAM_A  <= wr ? addr[COL_WIDTH+ROW_WIDTH+BANK_WIDTH-1:COL_WIDTH+BANK_WIDTH] :
@@ -248,29 +252,27 @@ always @(posedge clk or negedge resetn) begin
                 end
             end
 
-            // ---- Write sequence ----
+            // ============================================================
+            // ESCRITA SEQUENCIAL EM RAJADA (Burst Write de 80 palavras em 86 ciclos = 2.98 µs)
+            // ============================================================
             S_WRITE: begin
                 if (wait_cnt != 0)
                     wait_cnt <= wait_cnt - 1;
                 else begin
-                    set_cmd(CMD_WRITE);
-                    // A[10]=1 → auto-precharge; A[9:8]=0; A[7:0]=column
-                    SDRAM_A   <= {1'b1, 2'b00, addr_reg[COL_WIDTH-1:0]};
-                    SDRAM_DQM <= 4'b0000;
-                    dq_oe     <= 1;
-                    dq_out    <= din_reg;
-                    wait_cnt  <= T_WR;
-                    state     <= S_WRITE_D1;
-                end
-            end
-
-            S_WRITE_D1: begin
-                if (wait_cnt != 0)
-                    wait_cnt <= wait_cnt - 1;
-                else begin
-                    dq_oe    <= 0;
-                    wait_cnt <= T_RP + 4'd1; // Garante tWR + tRP completo (4 ciclos) antes do S_IDLE
-                    state    <= S_PRECHARGE2;
+                    if (burst_cnt < 7'd80) begin
+                        set_cmd(CMD_WRITE);
+                        // No último dado (palavra 79), dispara o Auto-Precharge (A[10]=1) para fechar a linha
+                        SDRAM_A   <= (burst_cnt == 7'd79) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
+                        SDRAM_DQM <= 4'b0000;
+                        dq_oe     <= 1;
+                        dq_out    <= din; // Dado recebido diretamente da BRAM wr_line_buf
+                        col_addr  <= burst_cnt + 7'd1; // Pré-busca a próxima palavra para compensar a latência de 1 ciclo da BRAM!
+                        burst_cnt <= burst_cnt + 7'd1;
+                    end else begin
+                        dq_oe    <= 0;
+                        wait_cnt <= T_WR + T_RP + 4'd1; // Garante tWR + tRP completo (4 ciclos) antes do S_IDLE
+                        state    <= S_PRECHARGE2;
+                    end
                 end
             end
 

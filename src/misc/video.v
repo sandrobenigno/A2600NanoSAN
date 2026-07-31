@@ -91,12 +91,13 @@ video_stabilize video_stabilize
 
 // frame_buffer outputs only pixel data (no timing signals)
 wire [7:0]  fb_rd_r, fb_rd_g, fb_rd_b;
-
 wire        fb_sdram_rd, fb_sdram_wr, fb_sdram_refresh;
 wire [22:0] fb_sdram_addr;
 wire [31:0] fb_sdram_din;
 wire [31:0] fb_sdram_dout;
 wire        fb_sdram_data_ready;
+wire [6:0]  fb_sdram_col;
+wire        fb_sdram_busy;
 reg [15:0] por_cnt = 0;
 reg        por_resetn = 0;
 
@@ -146,7 +147,8 @@ frame_buffer frame_buffer (
     .sdram_din        (fb_sdram_din),
     .sdram_dout       (fb_sdram_dout),
     .sdram_data_ready (fb_sdram_data_ready),
-    .sdram_busy       (fb_sdram_busy)
+    .sdram_busy       (fb_sdram_busy),
+    .sdram_col        (fb_sdram_col)
 );
 
 sdram #(
@@ -177,7 +179,8 @@ sdram #(
     .din        (fb_sdram_din),
     .dout       (fb_sdram_dout),
     .data_ready (fb_sdram_data_ready),
-    .busy       (fb_sdram_busy)
+    .busy       (fb_sdram_busy),
+    .col_addr   (fb_sdram_col)
 );
 
 // generate 48khz audio clock
