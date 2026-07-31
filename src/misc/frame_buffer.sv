@@ -100,6 +100,7 @@ end
 // ============================================================
 reg wr_hblank_d, wr_vsync_d, rd_hblank_d;
 wire wr_hblank_rise = !wr_hblank_d && wr_hblank;
+wire wr_hblank_fall =  wr_hblank_d && !wr_hblank; // Início do vídeo ativo do TIA
 wire wr_vsync_rise  = !wr_vsync_d  && wr_vsync;
 wire rd_hblank_fall =  rd_hblank_d && !rd_hblank_in; // Início da imagem ativa no monitor
 wire rd_hblank_rise = !rd_hblank_d &&  rd_hblank_in; // Início do retorno de tela (HBLANK)
@@ -174,6 +175,13 @@ always @(posedge clk or negedge resetn) begin
                 wr_line_max <= wr_line_max_next;
                 wr_line_min_next <= 10'h3FF;
                 wr_line_max_next <= 0;
+            end
+
+            // Início do vídeo ativo do TIA: zera a fase e os contadores para alinhamento perfeito do Pixel 0
+            if (wr_hblank_fall && frame_valid) begin
+                wr_tick    <= 0;
+                wr_wcnt    <= 0;
+                wr_has_odd <= 0;
             end
 
             // Final da linha ativa (HBLANK): se sobrou um pixel ímpar, empacota e salva
