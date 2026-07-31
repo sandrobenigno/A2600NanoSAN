@@ -91,6 +91,7 @@ end
 // ============================================================
 reg wr_hblank_d, wr_vsync_d, rd_hblank_d;
 wire wr_hblank_rise = !wr_hblank_d && wr_hblank;
+wire wr_hblank_fall =  wr_hblank_d && !wr_hblank; // início do vídeo ativo do TIA
 wire wr_vsync_rise  = !wr_vsync_d  && wr_vsync;
 wire rd_hblank_fall =  rd_hblank_d && !rd_hblank_in; // início do vídeo ativo
 wire rd_hblank_rise = !rd_hblank_d &&  rd_hblank_in; // início do hblank
@@ -115,13 +116,13 @@ function automatic [11:0] pack_px;
     pack_px = {r[7:4], g[7:4], b[7:4]};
 endfunction
 
-localparam FDEPTH = 4;
-localparam FBITS  = 3; // 3 bits to distinguish full vs empty with FDEPTH=4
+localparam FDEPTH = 16;
+localparam FBITS  = 5; // 5 bits to distinguish full vs empty with FDEPTH=16
 reg [31:0] wf_dat  [FDEPTH-1:0];
 reg [22:0] wf_addr [FDEPTH-1:0];
 reg [FBITS-1:0] wf_wptr, wf_rptr;
 wire wf_empty = (wf_wptr == wf_rptr);
-wire wf_full  = (wf_wptr - wf_rptr == 3'd4);
+wire wf_full  = (wf_wptr - wf_rptr == 5'd16);
 
 reg        clk_cpu_d;
 reg [31:0] sdram_dout_neg;
@@ -175,10 +176,17 @@ always @(posedge clk or negedge resetn) begin
                 wr_line_max_next <= 0;
             end
 
+            // Início do vídeo ativo do TIA: reseta contadores de pixel para amostragem síncrona perfeita
+            if (wr_hblank_fall && frame_valid) begin
+                wr_tick    <= 0;
+                wr_wcnt    <= 0;
+                wr_has_odd <= 0;
+            end
+
             if (wr_hblank_rise && frame_valid) begin
                 if (wr_has_odd && !wf_full) begin
-                    wf_dat [wf_wptr[1:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
-                    wf_addr[wf_wptr[1:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
+                    wf_dat [wf_wptr[3:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
+                    wf_addr[wf_wptr[3:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
                     wf_wptr    <= wf_wptr + 1;
                 end
                 wr_has_odd <= 0; // Garantia absoluta: TODA linha sempre começa no Pixel 0!
@@ -194,18 +202,20 @@ always @(posedge clk or negedge resetn) begin
                 wr_wcnt <= 0;
             end
 
-            if (!wr_hblank && !wr_vblank) begin
+            if (wr_hblank) begin
+                wr_has_odd <= 0;
+            end else if (!wr_vblank) begin
                 // Sample at a stable phase (3'd7) of the 8-cycle TIA pixel period
                 if (wr_tick == 3'd7 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
                     if (!wr_has_odd) begin
                         wr_odd_pixel <= pack_px(wr_r, wr_g, wr_b);
                         wr_has_odd   <= 1;
                     end else begin
-                        wf_dat [wf_wptr[1:0]] <= {
+                        wf_dat [wf_wptr[3:0]] <= {
                             pack_px(wr_r, wr_g, wr_b), 4'b0,
                             wr_odd_pixel, 4'b0
                         };
-                        wf_addr[wf_wptr[1:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
+                        wf_addr[wf_wptr[3:0]] <= make_addr(bank_wr, wr_lcnt, {1'b0, wr_wcnt});
                         wf_wptr    <= wf_wptr + 1;
                         wr_wcnt    <= wr_wcnt + 1;
                         wr_has_odd <= 0;
@@ -258,13 +268,12 @@ always @(posedge clk or negedge resetn) begin
             rd_active <= 1;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
+            lb_raddr  <= 0;
         end
 
-        // Início do hblank: pré-carrega lb_raddr=0 para que lb_rdat já
-        // tenha line_buf[0] pronto antes do primeiro pixel ativo
+        // Início do hblank: desativa rd_active
         if (rd_hblank_rise) begin
             rd_active <= 0;
-            lb_raddr  <= 0;
         end
 
         // Saída de pixel — somente durante região ativa
@@ -388,12 +397,12 @@ always @(posedge clk or negedge resetn) begin
                     end
                     default: ;
                 endcase
-            end else if (refresh_due) begin
+            end else if (refresh_due && !fetch_active) begin
                 sdram_refresh <= 1;
                 refresh_due   <= 0;
             end else if (!wf_empty) begin
-                sdram_addr <= wf_addr[wf_rptr[1:0]];
-                sdram_din  <= wf_dat [wf_rptr[1:0]];
+                sdram_addr <= wf_addr[wf_rptr[3:0]];
+                sdram_din  <= wf_dat [wf_rptr[3:0]];
                 sdram_wr   <= 1;
                 wf_rptr    <= wf_rptr + 1;
             end
