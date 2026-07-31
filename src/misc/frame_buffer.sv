@@ -177,14 +177,14 @@ always @(posedge clk or negedge resetn) begin
                 wr_line_max_next <= 0;
             end
 
-            // Início do vídeo ativo do TIA: zera a fase e os contadores para alinhamento perfeito do Pixel 0
+            // Início do vídeo ativo do TIA (borda de descida do HBLANK): resincroniza a fase no Pixel 0
             if (wr_hblank_fall && frame_valid) begin
                 wr_tick    <= 0;
                 wr_wcnt    <= 0;
                 wr_has_odd <= 0;
             end
 
-            // Final da linha ativa (HBLANK): se sobrou um pixel ímpar, empacota e salva
+            // Final da linha ativa (HBLANK): empacota pixel ímpar restante e zera a contagem
             if (wr_hblank_rise && frame_valid) begin
                 if (wr_has_odd && wr_wcnt < WORDS_PER_LINE) begin
                     wr_wdat  <= { 12'b0, 4'b0, wr_odd_pixel, 4'b0 };
@@ -203,7 +203,7 @@ always @(posedge clk or negedge resetn) begin
                 wr_wcnt <= 0;
             end
 
-            // Durante o vídeo ativo: amostragem contínua dos pixels do TIA para a BRAM wr_line_buf
+            // Amostragem contínua dos pixels do TIA para a BRAM wr_line_buf durante o vídeo ativo
             if (wr_hblank || wr_vblank) begin
                 wr_has_odd <= 0;
                 wr_wcnt    <= 0;

@@ -192,12 +192,6 @@ always @(posedge clk or negedge resetn) begin
             S_IDLE: begin
                 if (!initialized) begin
                     state <= S_INIT_WAIT;
-                end else if (ref_reg || refresh) begin
-                    ref_reg  <= 0;
-                    busy     <= 1;
-                    set_cmd(CMD_AUTO_REFRESH);
-                    wait_cnt <= T_RC;
-                    state    <= S_REFRESH;
                 end else if (rd_reg || rd) begin
                     addr_reg  <= rd ? addr : addr_reg;
                     rd_reg    <= 0;
@@ -225,6 +219,12 @@ always @(posedge clk or negedge resetn) begin
                                      addr_reg[COL_WIDTH+ROW_WIDTH+BANK_WIDTH-1:COL_WIDTH+BANK_WIDTH];
                     wait_cnt <= T_RCD;
                     state    <= S_WRITE;
+                end else if (ref_reg || refresh) begin
+                    ref_reg  <= 0;
+                    busy     <= 1;
+                    set_cmd(CMD_AUTO_REFRESH);
+                    wait_cnt <= T_RC;
+                    state    <= S_REFRESH;
                 end else begin
                     busy <= 0;
                 end
