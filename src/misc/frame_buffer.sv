@@ -124,6 +124,11 @@ wire wf_empty = (wf_wptr == wf_rptr);
 wire wf_full  = (wf_wptr - wf_rptr == 3'd4);
 
 reg        clk_cpu_d;
+reg [31:0] sdram_dout_neg;
+
+always @(negedge clk) begin
+    sdram_dout_neg <= sdram_dout;
+end
 
 always @(posedge clk or negedge resetn) begin
     if (!resetn) begin
@@ -190,8 +195,8 @@ always @(posedge clk or negedge resetn) begin
             end
 
             if (!wr_hblank && !wr_vblank) begin
-                // Amostragem direta no Ciclo 1 (wr_tick == 3'd1) da cor do TIA
-                if (wr_tick == 3'd1 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
+                // Sample at a stable phase (3'd7) of the 8-cycle TIA pixel period
+                if (wr_tick == 3'd7 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
                     if (!wr_has_odd) begin
                         wr_odd_pixel <= pack_px(wr_r, wr_g, wr_b);
                         wr_has_odd   <= 1;
@@ -285,13 +290,15 @@ always @(posedge clk or negedge resetn) begin
                 // No ciclo 15, mantém a cor do ciclo 14 enquanto a BRAM troca para a próxima palavra
                 rd_r <= rd_r; rd_g <= rd_g; rd_b <= rd_b;
             end else if (!pclk_div[3]) begin
-                rd_r <= {lb_rdat[15:12], lb_rdat[15:12]};
-                rd_g <= {lb_rdat[11:8],  lb_rdat[11:8]};
-                rd_b <= {lb_rdat[7:4],   lb_rdat[7:4]};
+                // Pixel 0 (Par): Extração limpa com máscara de 4 bits
+                rd_r <= { (lb_rdat[15:12] & 4'hF), (lb_rdat[15:12] & 4'hF) };
+                rd_g <= { (lb_rdat[11:8]  & 4'hF), (lb_rdat[11:8]  & 4'hF) };
+                rd_b <= { (lb_rdat[7:4]   & 4'hF), (lb_rdat[7:4]   & 4'hF) };
             end else begin
-                rd_r <= {lb_rdat[31:28], lb_rdat[31:28]};
-                rd_g <= {lb_rdat[27:24], lb_rdat[27:24]};
-                rd_b <= {lb_rdat[23:20], lb_rdat[23:20]};
+                // Pixel 1 (Ímpar): Extração limpa com máscara de 4 bits
+                rd_r <= { (lb_rdat[31:28] & 4'hF), (lb_rdat[31:28] & 4'hF) };
+                rd_g <= { (lb_rdat[27:24] & 4'hF), (lb_rdat[27:24] & 4'hF) };
+                rd_b <= { (lb_rdat[23:20] & 4'hF), (lb_rdat[23:20] & 4'hF) };
             end
         end else if (!rd_active || rd_vblank_in) begin
             rd_r <= 0; rd_g <= 0; rd_b <= 0;
@@ -355,11 +362,12 @@ always @(posedge clk or negedge resetn) begin
             fetch_wcnt      <= 0;
             fetch_state     <= FETCH_IDLE;
             fetch_line      <= 0;
+            wf_rptr         <= 0;
         end
 
-        // Latch dado SDRAM → BRAM (ocorre com busy ainda=1)
+        // Latch dado SDRAM → BRAM (amostragem síncrona do meio-ciclo 17.3 ns)
         if (sdram_data_ready && fetch_state == FETCH_WAIT) begin
-            lb_wdat  <= sdram_dout;
+            lb_wdat  <= sdram_dout_neg;
             lb_waddr <= fetch_wcnt; // valor atual (NÃO incrementado ainda)
             lb_wen   <= 1;
         end

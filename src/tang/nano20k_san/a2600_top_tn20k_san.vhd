@@ -596,18 +596,8 @@ generic map (
             FDLY     => (others => '1')
         );
 
--- Divide CLKOUTP (144 MHz, 180°) by 5 to get clk_sdram (28.8 MHz, 180° relative to clk)
-sdram_clkdiv: CLKDIV
-generic map(
-    DIV_MODE => "5",
-    GSREN    => "false"
-)
-port map(
-    CLKOUT => clk_sdram,
-    HCLKIN => clk_pixel_x5p,
-    RESETN => pll_locked,
-    CALIB  => '0'
-);
+-- Phase-locked SDRAM clock (180° phase shifted from system clock clk, perfectly synchronous with zero counter drift)
+clk_sdram <= not clk;
 
 div1_inst: CLKDIV
 generic map(

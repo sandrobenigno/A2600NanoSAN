@@ -25,7 +25,7 @@ module sdram #(
     // Timing parameters (cycles at 28.8 MHz, 34.7 ns/cycle)
     // SDRAM spec: tRCD=15ns, tRP=15ns, tRC=60ns, tWR=2clk
     // At 28.8 MHz: 1 cycle=34.7ns >> all minimums satisfied with 1 cycle each
-    parameter [3:0]   CAS   = 4'd2,   // CAS latency = 2 cycles
+    parameter [3:0]   CAS   = 4'd3,   // CAS latency = 3 cycles
     parameter [3:0]   T_WR  = 4'd2,   // Write recovery = 2 cycles
     parameter [3:0]   T_MRD = 4'd2,   // Mode register set = 2 cycles
     parameter [3:0]   T_RP  = 4'd1,   // Precharge to active = 1 cycle (34.7ns > 15ns)
@@ -269,16 +269,17 @@ always @(posedge clk or negedge resetn) begin
             end
 
             S_WRITE_D1: begin
-                dq_oe <= 0;
                 if (wait_cnt != 0)
                     wait_cnt <= wait_cnt - 1;
                 else begin
-                    wait_cnt <= T_RP;
+                    dq_oe    <= 0;
+                    wait_cnt <= T_RP + 4'd1; // Garante tWR + tRP completo (4 ciclos) antes do S_IDLE
                     state    <= S_PRECHARGE2;
                 end
             end
 
             S_PRECHARGE2: begin
+                SDRAM_DQM <= 4'b1111;
                 if (wait_cnt != 0)
                     wait_cnt <= wait_cnt - 1;
                 else begin
