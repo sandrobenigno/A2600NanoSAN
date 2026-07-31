@@ -91,7 +91,6 @@ end
 // ============================================================
 reg wr_hblank_d, wr_vsync_d, rd_hblank_d;
 wire wr_hblank_rise = !wr_hblank_d && wr_hblank;
-wire wr_hblank_fall =  wr_hblank_d && !wr_hblank; // início do vídeo ativo do TIA
 wire wr_vsync_rise  = !wr_vsync_d  && wr_vsync;
 wire rd_hblank_fall =  rd_hblank_d && !rd_hblank_in; // início do vídeo ativo
 wire rd_hblank_rise = !rd_hblank_d &&  rd_hblank_in; // início do hblank
@@ -176,13 +175,6 @@ always @(posedge clk or negedge resetn) begin
                 wr_line_max_next <= 0;
             end
 
-            // Início do vídeo ativo do TIA: reseta contadores de pixel para amostragem síncrona perfeita
-            if (wr_hblank_fall && frame_valid) begin
-                wr_tick    <= 0;
-                wr_wcnt    <= 0;
-                wr_has_odd <= 0;
-            end
-
             if (wr_hblank_rise && frame_valid) begin
                 if (wr_has_odd && !wf_full) begin
                     wf_dat [wf_wptr[3:0]] <= {12'b0, 4'b0, wr_odd_pixel, 4'b0};
@@ -202,9 +194,10 @@ always @(posedge clk or negedge resetn) begin
                 wr_wcnt <= 0;
             end
 
-            if (wr_hblank) begin
+            if (wr_hblank || wr_vblank) begin
                 wr_has_odd <= 0;
-            end else if (!wr_vblank) begin
+                wr_wcnt    <= 0;
+            end else begin
                 // Sample at a stable phase (3'd7) of the 8-cycle TIA pixel period
                 if (wr_tick == 3'd7 && !wf_full && wr_wcnt < WORDS_PER_LINE) begin
                     if (!wr_has_odd) begin
@@ -268,12 +261,13 @@ always @(posedge clk or negedge resetn) begin
             rd_active <= 1;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
-            lb_raddr  <= 0;
         end
 
-        // Início do hblank: desativa rd_active
+        // Início do hblank: pré-carrega lb_raddr=0 para que lb_rdat já
+        // tenha line_buf[0] pronto antes do primeiro pixel ativo
         if (rd_hblank_rise) begin
             rd_active <= 0;
+            lb_raddr  <= 0;
         end
 
         // Saída de pixel — somente durante região ativa
@@ -397,7 +391,7 @@ always @(posedge clk or negedge resetn) begin
                     end
                     default: ;
                 endcase
-            end else if (refresh_due && !fetch_active) begin
+            end else if (refresh_due) begin
                 sdram_refresh <= 1;
                 refresh_due   <= 0;
             end else if (!wf_empty) begin
