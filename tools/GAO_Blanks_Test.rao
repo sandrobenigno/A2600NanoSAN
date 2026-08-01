@@ -2,26 +2,11 @@
 <GAO_CONFIG>
     <Version>3.0</Version>
     <Mode>Standard</Mode>
-    <AoCore index="0" sample_clock="clk" trig_type="0" storage_depth="2048" window_num="1" capture_amount="2048" implementation="0" trigger_pos="256" module_name="A2600_top" force_trigger_by_falling_edge="false" capture_init_data_enabled="false">
+    <AoCore index="0" sample_clock="clk" trig_type="0" storage_depth="1024" window_num="1" capture_amount="1024" implementation="0" trigger_pos="256" module_name="A2600_top" force_trigger_by_falling_edge="false" capture_init_data_enabled="false">
         <SignalList>
-            <Signal capture_enable="true">video_inst/frame_buffer/wr_hblank</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/rd_hblank_in</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/wr_hblank_d</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/rd_hblank_d</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/wr_hblank_rise</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/wr_hblank_fall</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/rd_hblank_fall</Signal>
-            <Signal capture_enable="true">video_inst/frame_buffer/rd_hblank_rise</Signal>
-            <Bus capture_enable="true" name="video_inst/frame_buffer/rd_wcnt[6:0]">
-                <Signal>video_inst/frame_buffer/rd_wcnt[6]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[5]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[4]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[3]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[2]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[1]</Signal>
-                <Signal>video_inst/frame_buffer/rd_wcnt[0]</Signal>
-            </Bus>
-            <Signal capture_enable="true">video_inst/frame_buffer/wr_vsync</Signal>
+            <Signal capture_enable="true">video_inst/fb_rd_r[7]</Signal>
+            <Signal capture_enable="true">video_inst/hb_in</Signal>
+            <Signal capture_enable="true">video_inst/r_in[3]</Signal>
         </SignalList>
         <Triggers>
             <Trigger index="0">
@@ -31,7 +16,7 @@
             </Trigger>
             <Trigger index="1">
                 <SignalList>
-                    <Signal>video_inst/frame_buffer/wr_hblank</Signal>
+                    <Signal>video_inst/hb_in</Signal>
                 </SignalList>
             </Trigger>
             <Trigger index="2">
@@ -54,9 +39,9 @@
             <Trigger index="15"/>
         </Triggers>
         <MatchUnits>
-            <MatchUnit index="0" enabled="1" match_type="3" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="R" value1="0" trigger="0"/>
-            <MatchUnit index="1" enabled="1" match_type="1" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="R" value1="0" trigger="1"/>
-            <MatchUnit index="2" enabled="1" match_type="1" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="R" value1="0" trigger="2"/>
+            <MatchUnit index="0" enabled="0" match_type="3" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="R" value1="0" trigger="0"/>
+            <MatchUnit index="1" enabled="1" match_type="1" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="F" value1="0" trigger="1"/>
+            <MatchUnit index="2" enabled="0" match_type="1" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="R" value1="0" trigger="2"/>
             <MatchUnit index="3" enabled="0" match_type="0" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="" value1=""/>
             <MatchUnit index="4" enabled="0" match_type="0" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="" value1=""/>
             <MatchUnit index="5" enabled="0" match_type="0" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="" value1=""/>
@@ -72,10 +57,8 @@
             <MatchUnit index="15" enabled="0" match_type="0" counter_enable="0" counter_width="2" counter="2" countinuous="0" func="0" value0="" value1=""/>
         </MatchUnits>
         <Expressions type="Static">
-            <Expression>M0</Expression>
             <Expression>M1</Expression>
-            <Expression>M2</Expression>
         </Expressions>
     </AoCore>
-    <GAO_ID>0101010001001000</GAO_ID>
+    <GAO_ID>1110001110000111</GAO_ID>
 </GAO_CONFIG>

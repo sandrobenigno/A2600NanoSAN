@@ -418,10 +418,9 @@ always @(posedge clk or negedge resetn) begin
                 sdram_wr    <= 1;
                 flush_state <= FLUSH_WAIT;
             end
-            // 3. Fase 3: Auto-Refresh Físico Obrigatório (6 ciclos = 0.21 µs) em TODO HBLANK
-            else if (fetch_state == FETCH_DONE && flush_state == FLUSH_DONE && !refresh_done_line) begin
-                sdram_refresh     <= 1;
-                refresh_done_line <= 1; // Garante 1 Auto-Refresh físico em cada HBLANK!
+            // 3. Fase 3: Auto-Refresh em Lote (Burst) exclusivo no VBLANK (Zero atraso nas linhas ativas!)
+            else if (wr_vblank && !sdram_busy) begin
+                sdram_refresh <= 1;
             end
         end
 
