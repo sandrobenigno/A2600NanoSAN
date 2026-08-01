@@ -203,8 +203,18 @@ always @(posedge clk or negedge resetn) begin
                 wr_wcnt <= 0;
             end
 
-            // Amostragem contínua dos pixels do TIA para a BRAM wr_line_buf durante o vídeo ativo
-            if (wr_hblank || wr_vblank) begin
+            // Amostragem síncrona do TIA durante vídeo ativo e preenchimento limpo com preto (32'h0) no HBLANK
+            if (wr_hblank && !wr_vblank && frame_valid) begin
+                wr_has_odd <= 0;
+                if (wr_wcnt < WORDS_PER_LINE) begin
+                    wr_wdat  <= 32'h0; // Preenche palavras restantes do lado direito com preto puro!
+                    wr_waddr <= wr_wcnt;
+                    wr_wen   <= 1;
+                    wr_wcnt  <= wr_wcnt + 1;
+                end else begin
+                    wr_wen   <= 0;
+                end
+            end else if (wr_vblank) begin
                 wr_has_odd <= 0;
                 wr_wcnt    <= 0;
                 wr_wen     <= 0;

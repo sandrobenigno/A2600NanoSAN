@@ -85,10 +85,10 @@ module video_stabilize
 			vsync_emulate <= 0;
 			if (v_count != total_lines) begin
 				vsync_set <= 1;
-				if (total_lines - v_count < 3'd4) begin
+				if (total_lines - v_count < 9'd16) begin
 					vsync_override <= 1;
 					vsync_line <= v_count;
-				end else if (v_count - total_lines < 3'd4) begin
+				end else if (v_count - total_lines < 9'd16) begin
 					vsync_override <= 1;
 					vsync_line <= total_lines;
 				end else begin
