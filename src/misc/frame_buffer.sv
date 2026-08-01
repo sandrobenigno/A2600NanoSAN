@@ -207,7 +207,7 @@ always @(posedge clk or negedge resetn) begin
             if (wr_hblank && !wr_vblank && frame_valid) begin
                 wr_has_odd <= 0;
                 if (wr_wcnt < WORDS_PER_LINE) begin
-                    wr_wdat  <= 32'h0; // Preenche palavras restantes do lado direito com preto puro!
+                    //wr_wdat  <= 32'h0; // Preenche palavras restantes do lado direito com preto puro!
                     wr_waddr <= wr_wcnt;
                     wr_wen   <= 1;
                     wr_wcnt  <= wr_wcnt + 1;
@@ -304,7 +304,7 @@ always @(posedge clk or negedge resetn) begin
 
             // Limpeza de borda: linhas fora da área gravada retornam Preto Puro (0,0,0)
             if (rd_lcnt < wr_line_min || rd_lcnt > wr_line_max || rd_wcnt >= WORDS_PER_LINE) begin
-                rd_r <= 0; rd_g <= 0; rd_b <= 0;
+                //rd_r <= 0; rd_g <= 0; rd_b <= 0;
             end else if (pclk_div == 4'd15) begin
                 rd_r <= rd_r; rd_g <= rd_g; rd_b <= rd_b;
             end else if (!pclk_div[3]) begin
