@@ -28,7 +28,7 @@ module frame_buffer (
     input           rd_vblank_in,   // Vblank estabilizado pelo video_stabilize
 
     // Saída de pixel para o Scandoubler (Apenas cor RGB)
-    output reg [7:0] rd_r, rd_g, rd_b,
+    output [7:0]    rd_r, rd_g, rd_b,
 
     // Controlador da SDRAM
     output reg        sdram_rd,
@@ -45,8 +45,10 @@ module frame_buffer (
 // ============================================================
 // CONSTANTES E ENDEREÇAMENTO FÍSICO DA SDRAM
 // ============================================================
-localparam [6:0]  WORDS_PER_LINE = 7'd80;   // 160 pixels / 2 pixels por palavra = 80 palavras
+localparam [6:0]  WORDS_PER_LINE = 7'd86;   // 172 pixels capturados (12 pixels folga/margem + 160 pixels úteis)
+localparam [6:0]  DISPLAY_WORDS  = 7'd80;   // 160 pixels exibidos no monitor
 localparam [9:0]  REFRESH_PERIOD = 10'd430;  // Período de auto-refresh da SDRAM
+parameter  [6:0]  H_START_WORD   = 7'd3;     // Deslocamento de leitura (3 palavras = 6 pixels TIA)
 
 // Função de montagem do endereço de 23 bits da SDRAM:
 //   bank: bit[8]      (Alternância de banco Ping-Pong 0 e 1)
@@ -167,12 +169,12 @@ always @(posedge clk or negedge resetn) begin
         if (!bypass) begin
             // Início de um novo quadro: alterna o banco de memória Ping-Pong
             if (wr_vsync_rise) begin
-                wr_lcnt     <= 0;
-                bank_wr     <= ~bank_wr;
-                wr_has_odd  <= 0;
-                frame_valid <= 1;
-                wr_line_min <= wr_line_min_next;
-                wr_line_max <= wr_line_max_next;
+                wr_lcnt          <= 0;
+                bank_wr          <= ~bank_wr;
+                wr_has_odd       <= 0;
+                frame_valid      <= 1;
+                wr_line_min      <= wr_line_min_next;
+                wr_line_max      <= wr_line_max_next;
                 wr_line_min_next <= 10'h3FF;
                 wr_line_max_next <= 0;
             end
@@ -203,18 +205,8 @@ always @(posedge clk or negedge resetn) begin
                 wr_wcnt <= 0;
             end
 
-            // Amostragem síncrona do TIA durante vídeo ativo e preenchimento limpo com preto (32'h0) no HBLANK
-            if (wr_hblank && !wr_vblank && frame_valid) begin
-                wr_has_odd <= 0;
-                if (wr_wcnt < WORDS_PER_LINE) begin
-                    //wr_wdat  <= 32'h0; // Preenche palavras restantes do lado direito com preto puro!
-                    wr_waddr <= wr_wcnt;
-                    wr_wen   <= 1;
-                    wr_wcnt  <= wr_wcnt + 1;
-                end else begin
-                    wr_wen   <= 0;
-                end
-            end else if (wr_vblank) begin
+            // Amostragem síncrona do TIA durante vídeo ativo
+            if (wr_hblank || wr_vblank) begin
                 wr_has_odd <= 0;
                 wr_wcnt    <= 0;
                 wr_wen     <= 0;
@@ -255,11 +247,9 @@ always @(posedge clk or negedge resetn) begin
         rd_active   <= 0;
         lb_raddr    <= 0;
         rd_hblank_d <= 1;
-        rd_r <= 0; rd_g <= 0; rd_b <= 0;
     end else if (bypass) begin
         rd_hblank_d <= rd_hblank_in;
         rd_active   <= 0;
-        rd_r <= wr_r; rd_g <= wr_g; rd_b <= wr_b;
     end else begin
         rd_hblank_d <= rd_hblank_in;
 
@@ -273,56 +263,41 @@ always @(posedge clk or negedge resetn) begin
         if (rd_hblank_rise && !wr_vsync_rise)
             rd_lcnt <= rd_lcnt + 1;
 
-        // Início do vídeo ativo no monitor
-        if (rd_hblank_fall && !rd_vblank_in) begin
-            rd_active <= 1;
+        // Durante o HBLANK ou VBLANK
+        if (rd_hblank_in || rd_vblank_in) begin
+            rd_active <= 0;
+            lb_raddr  <= H_START_WORD;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
-        end
+        end else begin
+            // Durante o vídeo ativo no monitor (rd_hblank_in == 0 e rd_vblank_in == 0)
+            rd_active <= 1;
+            pclk_div  <= pclk_div + 1;
 
-        // Início do HBLANK: pré-carrega o endereço 0 da BRAM
-        if (rd_hblank_rise) begin
-            rd_active <= 0;
-            lb_raddr  <= 0;
-        end
-
-        // Saída contínua de pixels durante a região ativa
-        if (rd_active && !rd_vblank_in) begin
-            pclk_div <= pclk_div + 1;
-
-            // Pré-busca do próximo endereço da BRAM no ciclo 14 para compensar a latência de 1 ciclo
-            if (pclk_div == 4'd14 && rd_wcnt < WORDS_PER_LINE - 1) begin
-                lb_raddr <= rd_wcnt + 1;
+            // Pré-busca da próxima palavra da BRAM no ciclo 14
+            if (pclk_div == 4'd14 && rd_wcnt < DISPLAY_WORDS - 1) begin
+                lb_raddr <= H_START_WORD + rd_wcnt + 7'd1;
             end
 
             if (pclk_div == 4'd15) begin
                 pclk_div <= 0;
                 rd_wcnt  <= rd_wcnt + 1;
-                if (rd_wcnt == WORDS_PER_LINE - 1)
+                if (rd_wcnt == DISPLAY_WORDS - 1)
                     rd_active <= 0;
             end
-
-            // Limpeza de borda: linhas fora da área gravada retornam Preto Puro (0,0,0)
-            if (rd_lcnt < wr_line_min || rd_lcnt > wr_line_max || rd_wcnt >= WORDS_PER_LINE) begin
-                //rd_r <= 0; rd_g <= 0; rd_b <= 0;
-            end else if (pclk_div == 4'd15) begin
-                rd_r <= rd_r; rd_g <= rd_g; rd_b <= rd_b;
-            end else if (!pclk_div[3]) begin
-                // Pixel 0 (Par): extração limpa dos 4 bits de cor por canal
-                rd_r <= { (lb_rdat[15:12] & 4'hF), (lb_rdat[15:12] & 4'hF) };
-                rd_g <= { (lb_rdat[11:8]  & 4'hF), (lb_rdat[11:8]  & 4'hF) };
-                rd_b <= { (lb_rdat[7:4]   & 4'hF), (lb_rdat[7:4]   & 4'hF) };
-            end else begin
-                // Pixel 1 (Ímpar): extração limpa dos 4 bits de cor por canal
-                rd_r <= { (lb_rdat[31:28] & 4'hF), (lb_rdat[31:28] & 4'hF) };
-                rd_g <= { (lb_rdat[27:24] & 4'hF), (lb_rdat[27:24] & 4'hF) };
-                rd_b <= { (lb_rdat[23:20] & 4'hF), (lb_rdat[23:20] & 4'hF) };
-            end
-        end else if (!rd_active || rd_vblank_in) begin
-            rd_r <= 0; rd_g <= 0; rd_b <= 0;
         end
     end
 end
+
+// Saída combinacional de cores com latência zero absoluta (Zero-latency direct decoding)
+wire line_in_range = (wr_line_max == 0) || (rd_lcnt > wr_line_min && rd_lcnt < wr_line_max);
+wire active_pixel_valid = !rd_hblank_in && !rd_vblank_in && line_in_range && (rd_wcnt < DISPLAY_WORDS);
+
+wire [11:0] current_px = !pclk_div[3] ? lb_rdat[15:4] : lb_rdat[31:20];
+
+assign rd_r = bypass ? wr_r : active_pixel_valid ? { current_px[11:8], current_px[11:8] } : 8'h0;
+assign rd_g = bypass ? wr_g : active_pixel_valid ? { current_px[7:4],  current_px[7:4]  } : 8'h0;
+assign rd_b = bypass ? wr_b : active_pixel_valid ? { current_px[3:0],  current_px[3:0]  } : 8'h0;
 
 // ============================================================
 // ÁRBITRO PRINCIPAL DA SDRAM (EXCLUSIVO NO HBLANK)

@@ -1,36 +1,36 @@
-// Simple SDRAM controller for Tang Nano 20K (GW2AR-18C embedded SDRAM)
-// Based on nand2mario sdram-tang-nano-20k (2023)
-// Adapted for 28.8 MHz operation with pixel FIFO for frame buffer use.
+// ============================================================================
+// Controlador Simplificado de SDRAM para Tang Nano 20K (FPGA GW2AR-18C)
+// Baseado na arquitetura nand2mario adaptada para Atari 2600 Nano SAN
 //
-// GW2AR-18C embedded SDRAM: 64Mbit, 32-bit wide
-//   Organization: 2K rows x 256 columns x 4 banks x 32 bits
-//   No .cst pin assignments needed — SDRAM is embedded in the SIP package.
-//   Requires: SDRAM_CLK fed from rPLL CLKOUTP (180° phase-shifted from clk).
+// Especificações da SDRAM Embutida (SiP):
+//   - Capacidade: 64 Mbit, Barramento de 32 bits de largura
+//   - Organização: 2K Linhas x 256 Colunas (Palavras) x 4 Bancos x 32 bits
+//   - Conexão Interna: Não requer pinagem .cst (conexão direta interna no SiP)
+//   - Clock: SDRAM_CLK alimentado pela saída invertida de fase (180°) do rPLL
 //
-// Interface: byte-addressed, non-bursting, auto-precharge.
-//   - Each read/write takes 5 cycles at <=66.7 MHz.
-//   - At 28.8 MHz (34.7 ns/cycle): all SDRAM timing specs met with margin.
-//   - Refresh: caller must assert 'refresh' at least once every 15 µs.
-//
-// This module uses DATA_WIDTH=32 (4 bytes per access) to maximize efficiency.
-// The frame_buffer packs two 12-bit pixels into one 32-bit word.
+// Operação em Rajada Sincronizada no HBLANK (28.8 MHz / 34.7 ns por ciclo):
+//   - Tamanho da Rajada (Burst Length): 86 palavras de 32 bits (172 pixels)
+//   - Auto-Precharge (A10=1): Disparado na palavra 85 para fechar a linha
+//   - Leitura (Fetch): 93 ciclos a 28.8 MHz (~3.22 µs) com Latência CAS = 3
+//   - Escrita (Flush): 92 ciclos a 28.8 MHz (~3.19 µs) guiado por col_addr
+// ============================================================================
 
 module sdram #(
     parameter         FREQ       = 28_800_000,
     parameter         DATA_WIDTH = 32,
-    parameter         ROW_WIDTH  = 11,   // 2K rows
-    parameter         COL_WIDTH  = 8,    // 256 words per row
-    parameter         BANK_WIDTH = 2,    // 4 banks
+    parameter         ROW_WIDTH  = 11,   // 2K linhas (endereçamento de linha)
+    parameter         COL_WIDTH  = 8,    // 256 palavras de 32 bits por linha
+    parameter         BANK_WIDTH = 2,    // 4 bancos físicos na SDRAM
 
-    // Timing parameters (cycles at 28.8 MHz, 34.7 ns/cycle)
-    // SDRAM spec: tRCD=15ns, tRP=15ns, tRC=60ns, tWR=2clk
-    // At 28.8 MHz: 1 cycle=34.7ns >> all minimums satisfied with 1 cycle each
-    parameter [3:0]   CAS   = 4'd3,   // CAS latency = 3 cycles
-    parameter [3:0]   T_WR  = 4'd2,   // Write recovery = 2 cycles
-    parameter [3:0]   T_MRD = 4'd2,   // Mode register set = 2 cycles
-    parameter [3:0]   T_RP  = 4'd1,   // Precharge to active = 1 cycle (34.7ns > 15ns)
-    parameter [3:0]   T_RCD = 4'd1,   // Active to R/W = 1 cycle (34.7ns > 15ns)
-    parameter [3:0]   T_RC  = 4'd2    // Ref/Active to Ref/Active = 2 cycles (69ns > 60ns)
+    // Parâmetros de Temporização em Ciclos de Clock a 28.8 MHz (34.7 ns/ciclo)
+    // Especificação SDRAM: tRCD=15ns, tRP=15ns, tRC=60ns, tWR=2 clk
+    // A 28.8 MHz: 1 ciclo (34.7ns) atende com margem todas as exigências mínimas
+    parameter [3:0]   CAS   = 4'd3,   // Latência CAS = 3 ciclos
+    parameter [3:0]   T_WR  = 4'd2,   // Tempo de recuperação de escrita = 2 ciclos
+    parameter [3:0]   T_MRD = 4'd2,   // Configuração do registrador de modo = 2 ciclos
+    parameter [3:0]   T_RP  = 4'd1,   // Precharge para ativação = 1 ciclo (34.7ns > 15ns)
+    parameter [3:0]   T_RCD = 4'd1,   // Ativação para Leitura/Escrita = 1 ciclo (34.7ns > 15ns)
+    parameter [3:0]   T_RC  = 4'd2    // Intervalo entre Auto-Refreshes = 2 ciclos (69.4ns > 60ns)
 )(
     // -------- SDRAM chip interface (internal SIP, no .cst needed) --------
     inout  [DATA_WIDTH-1:0]     SDRAM_DQ,
@@ -236,12 +236,12 @@ always @(posedge clk or negedge resetn) begin
                 else begin
                     // Pipeline data_ready (3 cycles CAS latency)
                     data_ready <= rd_pipe[2];
-                    rd_pipe    <= {rd_pipe[2:0], (burst_cnt < 7'd80)};
+                    rd_pipe    <= {rd_pipe[2:0], (burst_cnt < 7'd86)};
 
-                    if (burst_cnt < 7'd80) begin
+                    if (burst_cnt < 7'd86) begin
                         set_cmd(CMD_READ);
-                        // Column burst: A[10]=1 (Auto-Precharge) on word 79
-                        SDRAM_A   <= (burst_cnt == 7'd79) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
+                        // Column burst: A[10]=1 (Auto-Precharge) on word 85
+                        SDRAM_A   <= (burst_cnt == 7'd85) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
                         SDRAM_DQM <= 4'b0000;
                         dq_oe     <= 0;
                         burst_cnt <= burst_cnt + 7'd1;
@@ -253,16 +253,16 @@ always @(posedge clk or negedge resetn) begin
             end
 
             // ============================================================
-            // ESCRITA SEQUENCIAL EM RAJADA (Burst Write de 80 palavras em 86 ciclos = 2.98 µs)
+            // ESCRITA SEQUENCIAL EM RAJADA (Burst Write de 86 palavras em 92 ciclos = 3.19 µs)
             // ============================================================
             S_WRITE: begin
                 if (wait_cnt != 0)
                     wait_cnt <= wait_cnt - 1;
                 else begin
-                    if (burst_cnt < 7'd80) begin
+                    if (burst_cnt < 7'd86) begin
                         set_cmd(CMD_WRITE);
-                        // No último dado (palavra 79), dispara o Auto-Precharge (A[10]=1) para fechar a linha
-                        SDRAM_A   <= (burst_cnt == 7'd79) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
+                        // No último dado (palavra 85), dispara o Auto-Precharge (A[10]=1) para fechar a linha
+                        SDRAM_A   <= (burst_cnt == 7'd85) ? {1'b1, 2'b00, 1'b0, burst_cnt} : {1'b0, 2'b00, 1'b0, burst_cnt};
                         SDRAM_DQM <= 4'b0000;
                         dq_oe     <= 1;
                         dq_out    <= din; // Dado recebido diretamente da BRAM wr_line_buf
