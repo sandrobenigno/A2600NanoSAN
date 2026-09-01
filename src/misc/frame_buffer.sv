@@ -103,7 +103,8 @@ end
 reg wr_hblank_d, wr_vsync_d, rd_hblank_d;
 wire wr_hblank_rise = !wr_hblank_d && wr_hblank;
 wire wr_hblank_fall =  wr_hblank_d && !wr_hblank; // Início do vídeo ativo do TIA
-wire wr_vsync_rise  = !wr_vsync_d  && wr_vsync;
+wire wr_vsync_raw   = !wr_vsync_d  && wr_vsync;
+wire wr_vsync_rise  = wr_vsync_raw && (wr_lcnt > 10'd40 || !frame_valid); // Filtro debouncer anti-parasita (mínimo 40 linhas por quadro)
 wire rd_hblank_fall =  rd_hblank_d && !rd_hblank_in; // Início da imagem ativa no monitor
 wire rd_hblank_rise = !rd_hblank_d &&  rd_hblank_in; // Início do retorno de tela (HBLANK)
 
@@ -263,14 +264,14 @@ always @(posedge clk or negedge resetn) begin
         if (rd_hblank_rise && !wr_vsync_rise)
             rd_lcnt <= rd_lcnt + 1;
 
-        // Durante o HBLANK ou VBLANK
-        if (rd_hblank_in || rd_vblank_in) begin
+        // Durante o HBLANK
+        if (rd_hblank_in) begin
             rd_active <= 0;
             lb_raddr  <= H_START_WORD;
             pclk_div  <= 0;
             rd_wcnt   <= 0;
         end else begin
-            // Durante o vídeo ativo no monitor (rd_hblank_in == 0 e rd_vblank_in == 0)
+            // Durante o vídeo ativo no monitor (rd_hblank_in == 0)
             rd_active <= 1;
             pclk_div  <= pclk_div + 1;
 
@@ -289,9 +290,9 @@ always @(posedge clk or negedge resetn) begin
     end
 end
 
-// Saída combinacional de cores com latência zero absoluta (Zero-latency direct decoding)
+// Saída combinacional de cores com latência zero absoluta (Mapeamento 1:1 Natural)
 wire line_in_range = (wr_line_max == 0) || (rd_lcnt > wr_line_min && rd_lcnt < wr_line_max);
-wire active_pixel_valid = !rd_hblank_in && !rd_vblank_in && line_in_range && (rd_wcnt < DISPLAY_WORDS);
+wire active_pixel_valid = !rd_hblank_in && line_in_range && (rd_wcnt < DISPLAY_WORDS);
 
 wire [11:0] current_px = !pclk_div[3] ? lb_rdat[15:4] : lb_rdat[31:20];
 
@@ -301,8 +302,8 @@ assign rd_b = bypass ? wr_b : active_pixel_valid ? { current_px[3:0],  current_p
 
 // ============================================================
 // ÁRBITRO PRINCIPAL DA SDRAM (EXCLUSIVO NO HBLANK)
-//   • Fase 1: Fetch (Leitura em Rajada de 87 ciclos = 3.0 µs) da SDRAM → rd_line_buf
-//   • Fase 2: Flush (Escrita em Rajada de 86 ciclos = 2.98 µs) da wr_line_buf → SDRAM
+//   • Fase 1: Fetch (Leitura em Rajada de 86 palavras = 93 ciclos = 3.22 µs) da SDRAM → rd_line_buf
+//   • Fase 2: Flush (Escrita em Rajada de 86 palavras = 92 ciclos = 3.19 µs) da wr_line_buf → SDRAM
 // ============================================================
 reg [9:0]  fetch_line;
 reg [6:0]  fetch_wcnt;
@@ -360,12 +361,12 @@ always @(posedge clk or negedge resetn) begin
             fetch_active      <= 1;
             fetch_wcnt        <= 0;
             fetch_state       <= FETCH_IDLE;
-            fetch_line        <= rd_lcnt + 1;
+            fetch_line        <= rd_lcnt + 10'd1;
             flush_active      <= 1;
             flush_wcnt        <= 0;
             flush_state       <= FLUSH_IDLE;
             flush_line        <= (wr_lcnt > 0) ? (wr_lcnt - 1) : 10'd0;
-            refresh_done_line <= 0; // Habilita o Auto-Refresh obrigatório do HBLANK atual
+            refresh_done_line <= 0;
         end
 
         // Reset da SDRAM no Vsync
